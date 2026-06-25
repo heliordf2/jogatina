@@ -102,6 +102,37 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_chess_games_updated
       ON chess_games (updated_at DESC);
 
+    CREATE TABLE IF NOT EXISTS sudoku_collab_games (
+      id SERIAL PRIMARY KEY,
+      difficulty TEXT NOT NULL,
+      puzzle JSONB NOT NULL,
+      solution JSONB NOT NULL,
+      board JSONB NOT NULL,
+      given JSONB NOT NULL,
+      collab_turn TEXT NOT NULL REFERENCES players(id),
+      collab_scores JSONB NOT NULL DEFAULT '{"helio":0,"thamy":0}',
+      collab_cells JSONB NOT NULL DEFAULT '{"helio":[],"thamy":[]}',
+      errors INTEGER NOT NULL DEFAULT 0,
+      corrects INTEGER NOT NULL DEFAULT 0,
+      hints INTEGER NOT NULL DEFAULT 3,
+      turn_locked BOOLEAN NOT NULL DEFAULT FALSE,
+      paused BOOLEAN NOT NULL DEFAULT FALSE,
+      timer_seconds INTEGER NOT NULL DEFAULT 0,
+      timer_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status TEXT NOT NULL DEFAULT 'playing',
+      version INTEGER NOT NULL DEFAULT 1,
+      stats_recorded BOOLEAN NOT NULL DEFAULT FALSE,
+      created_by TEXT NOT NULL REFERENCES players(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sudoku_collab_games_updated
+      ON sudoku_collab_games (updated_at DESC);
+
+    ALTER TABLE sudoku_collab_games
+      ADD COLUMN IF NOT EXISTS stats_recorded BOOLEAN NOT NULL DEFAULT FALSE;
+
     CREATE TABLE IF NOT EXISTS player_presence (
       player_id TEXT PRIMARY KEY REFERENCES players(id),
       last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -5,12 +5,25 @@ const PIECE_SYMBOLS = {
 
 const PIECE_ORDER = { q: 0, r: 1, b: 2, n: 3, p: 4, k: 5 };
 
+export function normalizeMoves(moves) {
+  if (Array.isArray(moves)) return moves;
+  if (typeof moves === 'string') {
+    try {
+      const parsed = JSON.parse(moves);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export function getCapturedPiecesFromMoves(Chess, moves = []) {
   const chess = new Chess();
   const whiteLost = [];
   const blackLost = [];
 
-  for (const san of moves) {
+  for (const san of normalizeMoves(moves)) {
     const move = chess.move(san);
     if (!move?.captured) continue;
 

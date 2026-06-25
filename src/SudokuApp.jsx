@@ -13,10 +13,20 @@ import {
   INITIAL_SCORES,
   PLAYER_NAMES,
 } from './data/constants.js';
+import {
+  createOrJoinSudokuCollabGame,
+  fetchActiveSudokuCollabGame,
+  postSudokuCollabCell,
+  postSudokuCollabHint,
+  postSudokuCollabPause,
+  postSudokuCollabTurnLock,
+} from './utils/api.js';
 import { syncSudokuStats } from './utils/gameStats.js';
 import { recordGameStart } from './utils/gameSessions.js';
 import { loadScores, saveScores } from './utils/scores.js';
 import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sudoku.js';
+
+const COLLAB_POLL_MS = 1500;
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -42,6 +52,31 @@ function calcProgress(game) {
   return { filled, total, pct };
 }
 
+function serverGameToLocal(serverGame, prev) {
+  return {
+    board: serverGame.board,
+    solution: serverGame.solution,
+    given: serverGame.given,
+    selected: prev?.selected ?? null,
+    errors: serverGame.errors,
+    corrects: serverGame.corrects,
+    hints: serverGame.hints,
+    timer: serverGame.timer,
+    collabTurn: serverGame.collabTurn,
+    collabScores: serverGame.collabScores,
+    collabCells: serverGame.collabCells,
+    isCollab: true,
+    draftMode: prev?.draftMode ?? false,
+    drafts: prev?.drafts ?? createEmptyDrafts(),
+    turnLocked: serverGame.turnLocked,
+    paused: serverGame.paused,
+    serverId: serverGame.id,
+    serverVersion: serverGame.version,
+    serverStatus: serverGame.status,
+    serverDifficulty: serverGame.difficulty,
+  };
+}
+
 export default function SudokuApp({
   onBack,
   onlinePlayer,
@@ -61,8 +96,16 @@ export default function SudokuApp({
   const [scores, setScores] = useState(() => structuredClone(INITIAL_SCORES));
   const [game, setGame] = useState(createInitialGameState);
   const [winResult, setWinResult] = useState(null);
+  const [joiningCollab, setJoiningCollab] = useState(false);
 
   const timerRef = useRef(null);
+  const gameRef = useRef(game);
+  const lastVersionRef = useRef(0);
+  const winHandledRef = useRef(null);
+
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
 
   useEffect(() => {
     loadScores().then(setScores);
@@ -78,76 +121,144 @@ export default function SudokuApp({
   const startTimer = useCallback(() => {
     stopTimer();
     timerRef.current = setInterval(() => {
-      setGame((g) => ({ ...g, timer: g.timer + 1 }));
+      setGame((g) => {
+        if (!g.isCollab) return { ...g, timer: g.timer + 1 };
+        return g;
+      });
     }, 1000);
   }, [stopTimer]);
 
-  const doStart = useCallback(
-    (collab, currentPlayer) => {
+  const handleCollabWin = useCallback(
+    (serverGame) => {
+      if (winHandledRef.current === serverGame.id) return;
+      winHandledRef.current = serverGame.id;
       stopTimer();
-      const { solution, puzzle } = generateSudoku(diff);
-      setGame({
-        board: puzzle.map((r) => [...r]),
-        solution,
-        given: puzzle.map((r) => r.map((v) => v !== 0)),
-        selected: null,
-        errors: 0,
-        corrects: 0,
-        hints: 3,
-        timer: 0,
-        collabTurn: 'helio',
-        collabScores: { helio: 0, thamy: 0 },
-        collabCells: { helio: [], thamy: [] },
-        isCollab: collab,
-        draftMode: false,
-        drafts: createEmptyDrafts(),
-        turnLocked: false,
-        paused: false,
+
+      const timeStr = formatTime(serverGame.timer);
+      const h = serverGame.collabScores.helio;
+      const tt = serverGame.collabScores.thamy;
+      const winner = h > tt ? 'helio' : tt > h ? 'thamy' : null;
+      const gameDiff = serverGame.difficulty || diff;
+      const diffLabel = DIFF_NAMES[gameDiff].replace('💀 ', '');
+
+      loadScores().then(setScores);
+
+      setWinResult({
+        emoji: winner ? '🏆' : '🤝',
+        title: winner ? `${PLAYER_NAMES[winner]} venceu o duelo!` : 'Empate!',
+        sub: `Sudoku ${diffLabel} completado!`,
+        time: timeStr,
+        pts: Math.max(h, tt),
+        errors: serverGame.errors,
+        collabDetail: {
+          helio: { pts: h, cells: serverGame.collabCells.helio.length },
+          thamy: { pts: tt, cells: serverGame.collabCells.thamy.length },
+        },
       });
-      setScreen('game');
-      startTimer();
-
-      const sessionPlayer = collab ? currentPlayer : onlinePlayer;
-      recordGameStart(sessionPlayer, 'sudoku', collab ? 'collab' : 'solo');
-
-      if (collab && currentPlayer) {
-        addChatMsg(
-          'system',
-          null,
-          `🎮 Duelo iniciado! ${PLAYER_NAMES[currentPlayer]} começa jogando.`,
-        );
-      }
+      setTimeout(() => setScreen('win'), 700);
     },
-    [addChatMsg, diff, onlinePlayer, startTimer, stopTimer],
+    [diff, stopTimer],
   );
+
+  const applyServerCollabGame = useCallback(
+    (serverGame, { chatMessage, toastMessage, toastDuration = 1500, clearSelection = false } = {}) => {
+      lastVersionRef.current = serverGame.version;
+      setGame((prev) => {
+        const next = serverGameToLocal(serverGame, prev);
+        if (clearSelection) next.selected = null;
+        return next;
+      });
+      if (serverGame.difficulty) setDiff(serverGame.difficulty);
+      if (toastMessage) showToast(toastMessage, toastDuration);
+      if (chatMessage) addChatMsg('system', null, chatMessage);
+      if (serverGame.status === 'won') handleCollabWin(serverGame);
+    },
+    [addChatMsg, handleCollabWin, showToast],
+  );
+
+  const doStartSolo = useCallback(() => {
+    stopTimer();
+    const { solution, puzzle } = generateSudoku(diff);
+    setGame({
+      board: puzzle.map((r) => [...r]),
+      solution,
+      given: puzzle.map((r) => r.map((v) => v !== 0)),
+      selected: null,
+      errors: 0,
+      corrects: 0,
+      hints: 3,
+      timer: 0,
+      collabTurn: 'helio',
+      collabScores: { helio: 0, thamy: 0 },
+      collabCells: { helio: [], thamy: [] },
+      isCollab: false,
+      draftMode: false,
+      drafts: createEmptyDrafts(),
+      turnLocked: false,
+      paused: false,
+    });
+    setScreen('game');
+    startTimer();
+    recordGameStart(onlinePlayer, 'sudoku', 'solo');
+  }, [diff, onlinePlayer, startTimer, stopTimer]);
 
   const startSolo = useCallback(() => {
     if (!onlinePlayer) {
       showToast('Selecione quem você é na tela inicial');
       return;
     }
-    doStart(false, null);
-  }, [doStart, onlinePlayer, showToast]);
+    doStartSolo();
+  }, [doStartSolo, onlinePlayer, showToast]);
 
-  const startCollab = useCallback(() => {
-    if (!onlinePlayer) {
-      showToast('Selecione quem você é na tela inicial');
-      return;
-    }
-    doStart(true, onlinePlayer);
-  }, [doStart, onlinePlayer, showToast]);
+  const startCollab = useCallback(
+    async (forceNew = false) => {
+      if (!onlinePlayer) {
+        showToast('Selecione quem você é na tela inicial');
+        return;
+      }
 
-  const switchPlayer = useCallback(() => {
-    if (!onlinePlayer) return;
-    const next = onlinePlayer === 'helio' ? 'thamy' : 'helio';
-    onSetOnline(next);
-    addChatMsg('system', null, `👤 ${PLAYER_NAMES[next]} ficou online.`);
-  }, [addChatMsg, onlinePlayer, onSetOnline]);
+      setJoiningCollab(true);
+      try {
+        const { game: serverGame, joined } = await createOrJoinSudokuCollabGame({
+          player: onlinePlayer,
+          difficulty: diff,
+          forceNew,
+        });
+
+        stopTimer();
+        winHandledRef.current = null;
+        lastVersionRef.current = serverGame.version;
+        setGame(serverGameToLocal(serverGame, null));
+        if (serverGame.difficulty) setDiff(serverGame.difficulty);
+        setScreen('game');
+        recordGameStart(onlinePlayer, 'sudoku', 'collab');
+
+        if (joined) {
+          addChatMsg('system', null, `🤝 ${PLAYER_NAMES[onlinePlayer]} entrou no duelo online!`);
+        } else {
+          addChatMsg(
+            'system',
+            null,
+            `🎮 Duelo online! ${PLAYER_NAMES[serverGame.collabTurn]} começa jogando.`,
+          );
+        }
+
+        if (serverGame.status === 'won') handleCollabWin(serverGame);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        setJoiningCollab(false);
+      }
+    },
+    [addChatMsg, diff, handleCollabWin, onlinePlayer, showToast, stopTimer],
+  );
 
   const goHome = useCallback(() => {
     stopTimer();
     setScreen('home');
     setWinResult(null);
+    winHandledRef.current = null;
+    lastVersionRef.current = 0;
   }, [stopTimer]);
 
   const checkWin = useCallback(
@@ -162,87 +273,77 @@ export default function SudokuApp({
       const timeStr = formatTime(currentGame.timer);
       const diffLabel = DIFF_NAMES[diff].replace('💀 ', '');
 
-      if (currentGame.isCollab) {
-        const h = currentGame.collabScores.helio;
-        const tt = currentGame.collabScores.thamy;
-        const winner = h > tt ? 'helio' : tt > h ? 'thamy' : null;
+      const pts = Math.max(
+        0,
+        Math.round((1000 - currentGame.errors * 80) * DIFF_MULT[diff]),
+      );
 
-        setScores((prev) => {
-          const next = structuredClone(prev);
-          next.helio.total += h;
-          next.helio.games++;
-          next.thamy.total += tt;
-          next.thamy.games++;
-          const entry = {
-            pts: 0,
-            diff,
-            time: timeStr,
-            type: 'collab',
-            date: new Date().toLocaleDateString('pt-BR'),
-          };
-          next.helio.history.unshift({ ...entry, pts: h });
-          next.thamy.history.unshift({ ...entry, pts: tt });
-          if (next.helio.history.length > 20) next.helio.history.pop();
-          if (next.thamy.history.length > 20) next.thamy.history.pop();
-          saveScores(next).catch(() => {});
-          syncSudokuStats(next).catch(() => {});
-          return next;
-        });
-
-        setWinResult({
-          emoji: winner ? '🏆' : '🤝',
-          title: winner ? `${PLAYER_NAMES[winner]} venceu o duelo!` : 'Empate!',
-          sub: `Sudoku ${diffLabel} completado!`,
-          time: timeStr,
-          pts: Math.max(h, tt),
-          errors: currentGame.errors,
-          collabDetail: {
-            helio: { pts: h, cells: currentGame.collabCells.helio.length },
-            thamy: { pts: tt, cells: currentGame.collabCells.thamy.length },
-          },
-        });
-      } else {
-        const pts = Math.max(
-          0,
-          Math.round((1000 - currentGame.errors * 80) * DIFF_MULT[diff]),
-        );
-
-        setScores((prev) => {
-          const next = structuredClone(prev);
-          const p = next[onlinePlayer];
-          p.total += pts;
-          p.games++;
-          if (!p.best || pts > p.best) p.best = pts;
-          p.history.unshift({
-            pts,
-            diff,
-            time: timeStr,
-            type: 'solo',
-            date: new Date().toLocaleDateString('pt-BR'),
-          });
-          if (p.history.length > 20) p.history.pop();
-          saveScores(next).catch(() => {});
-          syncSudokuStats(next).catch(() => {});
-          return next;
-        });
-
-        setWinResult({
-          emoji: currentGame.errors === 0 ? '🎯' : '🎉',
-          title: `${PLAYER_NAMES[onlinePlayer]} concluiu!`,
-          sub:
-            `Sudoku ${diffLabel}` +
-            (currentGame.errors === 0 ? ' sem erros! Perfeito! 🌟' : ' resolvido!'),
-          time: timeStr,
+      setScores((prev) => {
+        const next = structuredClone(prev);
+        const p = next[onlinePlayer];
+        p.total += pts;
+        p.games++;
+        if (!p.best || pts > p.best) p.best = pts;
+        p.history.unshift({
           pts,
-          errors: currentGame.errors,
+          diff,
+          time: timeStr,
+          type: 'solo',
+          date: new Date().toLocaleDateString('pt-BR'),
         });
-      }
+        if (p.history.length > 20) p.history.pop();
+        saveScores(next).catch(() => {});
+        syncSudokuStats(next).catch(() => {});
+        return next;
+      });
+
+      setWinResult({
+        emoji: currentGame.errors === 0 ? '🎯' : '🎉',
+        title: `${PLAYER_NAMES[onlinePlayer]} concluiu!`,
+        sub:
+          `Sudoku ${diffLabel}` +
+          (currentGame.errors === 0 ? ' sem erros! Perfeito! 🌟' : ' resolvido!'),
+        time: timeStr,
+        pts,
+        errors: currentGame.errors,
+      });
 
       setTimeout(() => setScreen('win'), 700);
       return true;
     },
     [diff, onlinePlayer, stopTimer],
   );
+
+  useEffect(() => {
+    if (screen !== 'game' || !game.isCollab) return undefined;
+
+    let cancelled = false;
+
+    async function sync() {
+      try {
+        const serverGame = await fetchActiveSudokuCollabGame();
+        if (cancelled || !serverGame) return;
+
+        if (serverGame.version !== lastVersionRef.current) {
+          lastVersionRef.current = serverGame.version;
+          setGame((prev) => serverGameToLocal(serverGame, prev));
+          if (serverGame.difficulty) setDiff(serverGame.difficulty);
+          if (serverGame.status === 'won') handleCollabWin(serverGame);
+        } else {
+          setGame((prev) => (prev.isCollab ? { ...prev, timer: serverGame.timer } : prev));
+        }
+      } catch {
+        // ignore transient sync errors
+      }
+    }
+
+    sync();
+    const id = setInterval(sync, COLLAB_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [game.isCollab, handleCollabWin, screen]);
 
   const selectCell = useCallback(
     (r, c) => {
@@ -264,196 +365,207 @@ export default function SudokuApp({
   );
 
   const enterNum = useCallback(
-    (n) => {
-      setGame((g) => {
-        if (g.paused) return g;
-        if (!g.selected) {
-          showToast('Selecione uma célula!');
-          return g;
-        }
-        const [r, c] = g.selected;
-        if (g.given[r][c] || isCellLocked(g, r, c)) return g;
-        if (g.isCollab && g.collabTurn !== onlinePlayer) {
-          showToast('🔒 Não é sua vez!');
-          return g;
-        }
+    async (n) => {
+      const g = gameRef.current;
+      if (g.paused) return;
+      if (!g.selected) {
+        showToast('Selecione uma célula!');
+        return;
+      }
+      const [r, c] = g.selected;
+      if (g.given[r][c] || isCellLocked(g, r, c)) return;
+      if (g.isCollab && g.collabTurn !== onlinePlayer) {
+        showToast('🔒 Não é sua vez!');
+        return;
+      }
 
-        if (g.draftMode && n !== 0) {
-          if (g.board[r][c]) return g;
-          const drafts = g.drafts.map((row) => row.map((set) => new Set(set)));
+      if (g.draftMode && n !== 0) {
+        setGame((current) => {
+          if (current.board[r][c]) return current;
+          const drafts = current.drafts.map((row) => row.map((set) => new Set(set)));
           const draft = drafts[r][c];
           if (draft.has(n)) draft.delete(n);
           else draft.add(n);
-          return { ...g, drafts };
-        }
+          return { ...current, drafts };
+        });
+        return;
+      }
 
-        const next = { ...g, board: g.board.map((row) => [...row]) };
+      if (g.isCollab) {
+        try {
+          const { game: serverGame, chatMessage } = await postSudokuCollabCell({
+            player: onlinePlayer,
+            row: r,
+            col: c,
+            value: n,
+          });
+          const toastMessage =
+            n === 0
+              ? null
+              : chatMessage?.includes('acertou')
+                ? chatMessage
+                : chatMessage?.includes('errou')
+                  ? chatMessage
+                  : null;
+          applyServerCollabGame(serverGame, {
+            chatMessage,
+            toastMessage: toastMessage ?? undefined,
+            clearSelection: true,
+          });
+        } catch (error) {
+          showToast(error.message);
+        }
+        return;
+      }
+
+      setGame((current) => {
+        if (current.paused) return current;
+        if (!current.selected) return current;
+        const [row, col] = current.selected;
+        if (current.given[row][col] || isCellLocked(current, row, col)) return current;
+
+        const next = { ...current, board: current.board.map((rowArr) => [...rowArr]) };
         const drafts = next.drafts.map((row) => row.map((set) => new Set(set)));
 
-        if (next.isCollab) {
-          const turn = next.collabTurn;
-          if (n === 0) {
-            next.board[r][c] = 0;
-            next.collabCells = {
-              helio: next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c)),
-              thamy: next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c)),
-            };
-            next.drafts = drafts;
-            return next;
-          }
-
-          const correct = n === next.solution[r][c];
-          next.board[r][c] = n;
-          drafts[r][c].clear();
-          next.collabCells = {
-            helio: next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c)),
-            thamy: next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c)),
-          };
-          next.collabCells[turn] = [...next.collabCells[turn], [r, c]];
-
-          if (correct) {
-            next.collabScores = {
-              ...next.collabScores,
-              [turn]: next.collabScores[turn] + 10,
-            };
-            next.corrects++;
-            removeDraftFromRegion(drafts, r, c, n);
-            const msg = `${turn === 'helio' ? '🟣 Helio' : '🩷 Thamy'} acertou +10! ✅`;
-            showToast(msg, 1500);
-            addChatMsg('system', null, msg);
-          } else {
-            next.collabScores = {
-              ...next.collabScores,
-              [turn]: Math.max(0, next.collabScores[turn] - 5),
-            };
-            next.errors++;
-            const msg = `❌ ${PLAYER_NAMES[turn]} errou -5pts`;
-            showToast(msg, 1500);
-            addChatMsg('system', null, msg);
-          }
-
-          next.collabTurn = turn === 'helio' ? 'thamy' : 'helio';
-          next.turnLocked = false;
-          next.selected = null;
-          next.drafts = drafts;
-          setTimeout(() => {
-            onSetOnline(next.collabTurn);
-            checkWin(next);
-          }, 0);
-          return next;
-        }
-
         if (n === 0) {
-          next.board[r][c] = 0;
+          next.board[row][col] = 0;
           next.drafts = drafts;
           return next;
         }
 
-        if (n === next.solution[r][c]) {
-          next.board[r][c] = n;
-          drafts[r][c].clear();
-          removeDraftFromRegion(drafts, r, c, n);
+        if (n === next.solution[row][col]) {
+          next.board[row][col] = n;
+          drafts[row][col].clear();
+          removeDraftFromRegion(drafts, row, col, n);
           next.corrects++;
           next.drafts = drafts;
           setTimeout(() => checkWin(next), 0);
           return next;
         }
 
-        next.board[r][c] = n;
+        next.board[row][col] = n;
         next.errors++;
         next.drafts = drafts;
         showToast('❌ Número incorreto!', 1500);
         return next;
       });
     },
-    [addChatMsg, checkWin, onlinePlayer, onSetOnline, showToast],
+    [applyServerCollabGame, checkWin, onlinePlayer, showToast],
   );
 
   const toggleDraft = useCallback(() => {
     setGame((g) => ({ ...g, draftMode: !g.draftMode }));
   }, []);
 
-  const togglePause = useCallback(() => {
-    setGame((g) => {
-      const paused = !g.paused;
+  const togglePause = useCallback(async () => {
+    const g = gameRef.current;
+    const paused = !g.paused;
+
+    if (g.isCollab) {
+      try {
+        const { game: serverGame } = await postSudokuCollabPause({
+          player: onlinePlayer,
+          paused,
+        });
+        applyServerCollabGame(serverGame, { clearSelection: true });
+      } catch (error) {
+        showToast(error.message);
+      }
+      return;
+    }
+
+    setGame((current) => {
       if (paused) {
         stopTimer();
-        return { ...g, paused: true, selected: null };
+        return { ...current, paused: true, selected: null };
       }
       startTimer();
-      return { ...g, paused: false };
+      return { ...current, paused: false };
     });
-  }, [startTimer, stopTimer]);
+  }, [applyServerCollabGame, onlinePlayer, showToast, startTimer, stopTimer]);
 
-  const toggleTurnLock = useCallback(() => {
-    setGame((g) => {
-      if (g.collabTurn !== onlinePlayer) {
-        showToast('Só quem está jogando pode travar!');
-        return g;
-      }
-      const locked = !g.turnLocked;
-      const msg = locked
-        ? `🔒 ${PLAYER_NAMES[onlinePlayer]} travou a vez`
-        : `🔓 ${PLAYER_NAMES[onlinePlayer]} destravou a vez`;
-      addChatMsg('system', null, msg);
-      return { ...g, turnLocked: locked };
-    });
-  }, [addChatMsg, onlinePlayer, showToast]);
+  const toggleTurnLock = useCallback(async () => {
+    const g = gameRef.current;
+    if (!g.isCollab) return;
 
-  const useHint = useCallback(() => {
-    setGame((g) => {
-      if (g.paused) return g;
-      if (g.hints <= 0) {
-        showToast('Sem dicas restantes!');
-        return g;
+    if (g.collabTurn !== onlinePlayer) {
+      showToast('Só quem está jogando pode travar!');
+      return;
+    }
+
+    const locked = !g.turnLocked;
+    try {
+      const { game: serverGame, chatMessage } = await postSudokuCollabTurnLock({
+        player: onlinePlayer,
+        locked,
+      });
+      applyServerCollabGame(serverGame, { chatMessage });
+    } catch (error) {
+      showToast(error.message);
+    }
+  }, [applyServerCollabGame, onlinePlayer, showToast]);
+
+  const useHint = useCallback(async () => {
+    const g = gameRef.current;
+    if (g.paused) return;
+    if (g.hints <= 0) {
+      showToast('Sem dicas restantes!');
+      return;
+    }
+    if (g.isCollab && g.collabTurn !== onlinePlayer) {
+      showToast('🔒 Não é sua vez!');
+      return;
+    }
+
+    if (g.isCollab) {
+      try {
+        const { game: serverGame, chatMessage } = await postSudokuCollabHint({
+          player: onlinePlayer,
+        });
+        applyServerCollabGame(serverGame, {
+          chatMessage,
+          toastMessage: '💡 Dica usada!',
+        });
+      } catch (error) {
+        showToast(error.message);
       }
-      if (g.isCollab && g.collabTurn !== onlinePlayer) {
-        showToast('🔒 Não é sua vez!');
-        return g;
-      }
+      return;
+    }
+
+    setGame((current) => {
+      if (current.paused) return current;
+      if (current.hints <= 0) return current;
 
       const empties = [];
       for (let r = 0; r < 9; r++) {
         for (let c = 0; c < 9; c++) {
-          if (!g.given[r][c] && g.board[r][c] !== g.solution[r][c]) {
+          if (!current.given[r][c] && current.board[r][c] !== current.solution[r][c]) {
             empties.push([r, c]);
           }
         }
       }
-      if (!empties.length) return g;
+      if (!empties.length) return current;
 
       const [r, c] = empties[Math.floor(Math.random() * empties.length)];
       const next = {
-        ...g,
-        board: g.board.map((row) => [...row]),
-        drafts: g.drafts.map((row) => row.map((set) => new Set(set))),
-        hints: g.hints - 1,
-        corrects: g.corrects + 1,
+        ...current,
+        board: current.board.map((row) => [...row]),
+        drafts: current.drafts.map((row) => row.map((set) => new Set(set))),
+        hints: current.hints - 1,
+        corrects: current.corrects + 1,
       };
       next.board[r][c] = next.solution[r][c];
       next.drafts[r][c].clear();
       removeDraftFromRegion(next.drafts, r, c, next.solution[r][c]);
-
-      if (next.isCollab) {
-        next.collabCells = {
-          ...next.collabCells,
-          [onlinePlayer]: [...next.collabCells[onlinePlayer], [r, c]],
-        };
-        next.collabTurn = onlinePlayer === 'helio' ? 'thamy' : 'helio';
-        next.turnLocked = false;
-        onSetOnline(next.collabTurn);
-        addChatMsg('system', null, `💡 ${PLAYER_NAMES[onlinePlayer]} usou uma dica!`);
-      }
-
       showToast('💡 Dica usada!', 1500);
       setTimeout(() => checkWin(next), 0);
       return next;
     });
-  }, [addChatMsg, checkWin, onlinePlayer, onSetOnline, showToast]);
+  }, [applyServerCollabGame, checkWin, onlinePlayer, showToast]);
 
   const newGame = useCallback(() => {
     stopTimer();
-    if (game.isCollab) startCollab();
+    if (game.isCollab) startCollab(true);
     else startSolo();
   }, [game.isCollab, startCollab, startSolo, stopTimer]);
 
@@ -506,12 +618,12 @@ export default function SudokuApp({
           onSetMode={setMode}
           onSetDiff={setDiff}
           onStartSolo={startSolo}
-          onStartCollab={startCollab}
+          onStartCollab={() => startCollab(false)}
           onShowRanking={() => setScreen('ranking')}
           onBack={onBack}
           onlinePlayer={onlinePlayer}
           remotePresence={remotePresence}
-          onSwitchPlayer={switchPlayer}
+          joiningCollab={joiningCollab}
         />
       )}
 
@@ -524,7 +636,6 @@ export default function SudokuApp({
           remotePresence={remotePresence}
           progress={progress}
           onGoHome={goHome}
-          onSwitchPlayer={switchPlayer}
           onSelectCell={selectCell}
           onEnterNum={enterNum}
           onToggleDraft={toggleDraft}
@@ -547,12 +658,12 @@ export default function SudokuApp({
 
       {(screen === 'home' || screen === 'game') && (
         <SharedChat
-            messages={chatMessages}
-            onlinePlayer={onlinePlayer}
-            onSendPlayerMessage={sendPlayerChat}
-            onClear={clearChatMessages}
-            onChatFocusChange={onChatFocusChange}
-          />
+          messages={chatMessages}
+          onlinePlayer={onlinePlayer}
+          onSendPlayerMessage={sendPlayerChat}
+          onClear={clearChatMessages}
+          onChatFocusChange={onChatFocusChange}
+        />
       )}
     </div>
   );

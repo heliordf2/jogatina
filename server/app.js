@@ -13,6 +13,14 @@ import { addChatMessage, clearChatMessages, listChatMessages } from './chatRepos
 import { getPresence, touchPresence } from './presenceRepository.js';
 import { listGameSessions, recordGameStart } from './sessionsRepository.js';
 import { getGameStats, getSudokuScores, saveGameStats, saveSudokuScores } from './statsRepository.js';
+import {
+  applySudokuCollabCell,
+  applySudokuCollabHint,
+  getActiveSudokuCollabGame,
+  getOrCreateSudokuCollabGame,
+  toggleSudokuCollabPause,
+  toggleSudokuCollabTurnLock,
+} from './sudokuCollabRepository.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,10 +54,16 @@ export function safeApiError(error) {
 }
 
 function registerApiRoutes(router) {
+  router.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    next();
+  });
+
   router.get('/health', async (_req, res) => {
     res.json({
       ok: true,
-      features: ['chat', 'presence', 'chess-online'],
+      features: ['chat', 'presence', 'chess-online', 'sudoku-collab-online'],
     });
   });
 
@@ -92,6 +106,96 @@ function registerApiRoutes(router) {
       res.json({ ok: true });
     } catch (error) {
       res.status(500).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.get('/sudoku/collab/game', async (_req, res) => {
+    try {
+      const game = await getActiveSudokuCollabGame();
+      if (!game) {
+        res.status(404).json({ error: 'Nenhum duelo ativo' });
+        return;
+      }
+      res.json(game);
+    } catch (error) {
+      res.status(500).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game', async (req, res) => {
+    try {
+      const { player, difficulty, forceNew = false } = req.body ?? {};
+      if (!player || !difficulty) {
+        res.status(400).json({ error: 'player e difficulty são obrigatórios' });
+        return;
+      }
+      const result = await getOrCreateSudokuCollabGame({
+        player,
+        difficulty,
+        forceNew: Boolean(forceNew),
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/cell', async (req, res) => {
+    try {
+      const { player, row, col, value } = req.body ?? {};
+      if (!player || row == null || col == null || value == null) {
+        res.status(400).json({ error: 'player, row, col e value são obrigatórios' });
+        return;
+      }
+      res.json(
+        await applySudokuCollabCell({
+          player,
+          row: Number(row),
+          col: Number(col),
+          value: Number(value),
+        }),
+      );
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/turn-lock', async (req, res) => {
+    try {
+      const { player, locked } = req.body ?? {};
+      if (!player || locked == null) {
+        res.status(400).json({ error: 'player e locked são obrigatórios' });
+        return;
+      }
+      res.json(await toggleSudokuCollabTurnLock({ player, locked: Boolean(locked) }));
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/hint', async (req, res) => {
+    try {
+      const { player } = req.body ?? {};
+      if (!player) {
+        res.status(400).json({ error: 'player é obrigatório' });
+        return;
+      }
+      res.json(await applySudokuCollabHint({ player }));
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/pause', async (req, res) => {
+    try {
+      const { player, paused } = req.body ?? {};
+      if (!player || paused == null) {
+        res.status(400).json({ error: 'player e paused são obrigatórios' });
+        return;
+      }
+      res.json(await toggleSudokuCollabPause({ player, paused: Boolean(paused) }));
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 

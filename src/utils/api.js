@@ -14,6 +14,32 @@ function resolveApiBase() {
 
 const API_BASE = resolveApiBase();
 
+const API_FETCH_OPTIONS = {
+  cache: 'no-store',
+  headers: { 'Content-Type': 'application/json' },
+};
+
+function isValidChessGame(game) {
+  return Boolean(
+    game &&
+      typeof game.id === 'number' &&
+      typeof game.fen === 'string' &&
+      game.whitePlayer &&
+      game.blackPlayer,
+  );
+}
+
+function isValidSudokuCollabGame(game) {
+  return Boolean(
+    game &&
+      typeof game.id === 'number' &&
+      Array.isArray(game.board) &&
+      game.board.length === 9 &&
+      game.collabTurn &&
+      game.difficulty,
+  );
+}
+
 function sanitizeClientError(message, fallback) {
   if (!message) return fallback;
   if (/127\.0\.0\.1|localhost|ECONNREFUSED|ENOTFOUND|fetch failed/i.test(message)) {
@@ -34,11 +60,12 @@ async function request(path, options = {}) {
 
   try {
     response = await fetch(`${API_BASE}${path}`, {
+      ...API_FETCH_OPTIONS,
+      ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...API_FETCH_OPTIONS.headers,
         ...options.headers,
       },
-      ...options,
     });
   } catch (error) {
     throw new Error(
@@ -73,9 +100,7 @@ export async function checkApiHealth({ retries = 1, delayMs = 0 } = {}) {
 
   for (let attempt = 0; attempt < retries; attempt += 1) {
     try {
-      const response = await fetch(`${API_BASE}/health`, {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await fetch(`${API_BASE}/health`, API_FETCH_OPTIONS);
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(sanitizeClientError(body.error, `Erro na API (${response.status})`));
@@ -122,25 +147,30 @@ export function recordGameStartApi({ player, game, mode = null }) {
 }
 
 export function fetchActiveChessGame() {
-  return fetch(`${API_BASE}/chess/game`, {
-    headers: { 'Content-Type': 'application/json' },
-  }).then(async (response) => {
-    if (response.status === 404) return null;
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(
-        sanitizeClientError(body.error, `Erro na API (${response.status})`),
-      );
-    }
-    return body;
-  });
+  return fetch(`${API_BASE}/chess/game?_=${Date.now()}`, API_FETCH_OPTIONS).then(
+    async (response) => {
+      if (response.status === 404 || response.status === 304) return null;
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          sanitizeClientError(body?.error, `Erro na API (${response.status})`),
+        );
+      }
+      if (!isValidChessGame(body)) return null;
+      return body;
+    },
+  );
 }
 
-export function createOrJoinChessGame({ player, forceNew = false }) {
-  return request('/chess/game', {
+export async function createOrJoinChessGame({ player, forceNew = false }) {
+  const game = await request('/chess/game', {
     method: 'POST',
     body: JSON.stringify({ player, forceNew }),
   });
+  if (!isValidChessGame(game)) {
+    throw new Error('Resposta inválida do servidor ao criar a partida');
+  }
+  return game;
 }
 
 export function postChessMove({ player, from, to, promotion = 'q' }) {
@@ -181,4 +211,59 @@ export function postChatMessage({ sender, player = null, text }) {
 
 export function clearChatApi() {
   return request('/chat', { method: 'DELETE' });
+}
+
+export function fetchActiveSudokuCollabGame() {
+  return fetch(`${API_BASE}/sudoku/collab/game?_=${Date.now()}`, API_FETCH_OPTIONS).then(
+    async (response) => {
+      if (response.status === 404 || response.status === 304) return null;
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          sanitizeClientError(body?.error, `Erro na API (${response.status})`),
+        );
+      }
+      if (!isValidSudokuCollabGame(body)) return null;
+      return body;
+    },
+  );
+}
+
+export async function createOrJoinSudokuCollabGame({ player, difficulty, forceNew = false }) {
+  const result = await request('/sudoku/collab/game', {
+    method: 'POST',
+    body: JSON.stringify({ player, difficulty, forceNew }),
+  });
+  if (!isValidSudokuCollabGame(result?.game)) {
+    throw new Error('Resposta inválida do servidor ao criar o duelo');
+  }
+  return result;
+}
+
+export function postSudokuCollabCell({ player, row, col, value }) {
+  return request('/sudoku/collab/game/cell', {
+    method: 'POST',
+    body: JSON.stringify({ player, row, col, value }),
+  });
+}
+
+export function postSudokuCollabTurnLock({ player, locked }) {
+  return request('/sudoku/collab/game/turn-lock', {
+    method: 'POST',
+    body: JSON.stringify({ player, locked }),
+  });
+}
+
+export function postSudokuCollabHint({ player }) {
+  return request('/sudoku/collab/game/hint', {
+    method: 'POST',
+    body: JSON.stringify({ player }),
+  });
+}
+
+export function postSudokuCollabPause({ player, paused }) {
+  return request('/sudoku/collab/game/pause', {
+    method: 'POST',
+    body: JSON.stringify({ player, paused }),
+  });
 }

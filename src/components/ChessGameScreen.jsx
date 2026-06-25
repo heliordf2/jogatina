@@ -14,6 +14,7 @@ import {
 import { isPlayerOnlineRemote } from '../hooks/useRemotePresence.js';
 import {
   getCapturedPiecesFromMoves,
+  normalizeMoves,
   PIECE_SYMBOLS,
 } from '../utils/chessHelpers.js';
 import { playCaptureSound, playCheckSound, playMoveSound, unlockAudio } from '../utils/chessSounds.js';
@@ -43,13 +44,27 @@ function CapturedPanel({ label, pieces, color }) {
   );
 }
 
+function isValidGame(game) {
+  return Boolean(
+    game &&
+      typeof game.id === 'number' &&
+      typeof game.fen === 'string' &&
+      game.whitePlayer &&
+      game.blackPlayer,
+  );
+}
+
 function mapServerGame(game) {
+  if (!isValidGame(game)) {
+    throw new Error('Dados da partida inválidos');
+  }
+
   const chess = new Chess(game.fen);
   return {
     id: game.id,
     fen: game.fen,
     turn: chess.turn(),
-    moves: game.moves ?? [],
+    moves: normalizeMoves(game.moves),
     status: game.status,
     winner: game.winner,
     whitePlayer: game.whitePlayer,
@@ -76,10 +91,18 @@ export default function ChessGameScreen({
   const prevMovesCount = useRef(0);
   const announcedEndRef = useRef(false);
 
-  const [gameState, setGameState] = useState(() =>
-    initialGame ? mapServerGame(initialGame) : null,
-  );
+  const [gameState, setGameState] = useState(() => {
+    if (!initialGame) return null;
+    try {
+      return mapServerGame(initialGame);
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(!initialGame);
+  const [loadError, setLoadError] = useState(
+    initialGame && !isValidGame(initialGame) ? 'Não foi possível carregar a partida' : null,
+  );
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [moving, setMoving] = useState(false);
 
@@ -137,8 +160,11 @@ export default function ChessGameScreen({
           applyServerGame(game);
           announceTerminalState(mapped);
         }
+        if (!cancelled) setLoadError(null);
       } catch {
-        // ignore transient sync errors
+        if (!cancelled && !initialGame) {
+          setLoadError('Não foi possível sincronizar a partida');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -150,7 +176,7 @@ export default function ChessGameScreen({
       cancelled = true;
       clearInterval(id);
     };
-  }, [announceTerminalState, applyServerGame]);
+  }, [announceTerminalState, applyServerGame, initialGame]);
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -281,13 +307,21 @@ export default function ChessGameScreen({
   }
 
   async function handleDrop({ sourceSquare, targetSquare }) {
-    if (!targetSquare || !isMyTurn || !isPlaying) {
+    if (!targetSquare || !isMyTurn || !isPlaying || !gameState) {
       setSelectedSquare(null);
       return false;
     }
-    const moved = await tryMove(sourceSquare, targetSquare);
-    if (!moved) setSelectedSquare(sourceSquare);
-    return moved;
+
+    const chess = new Chess(gameState.fen);
+    const move = chess.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
+    if (!move) {
+      setSelectedSquare(null);
+      return false;
+    }
+
+    setSelectedSquare(null);
+    void applyMove(sourceSquare, targetSquare);
+    return true;
   }
 
   async function handleResign() {
@@ -334,11 +368,11 @@ export default function ChessGameScreen({
     return null;
   }, [gameState, myself]);
 
-  if (loading || !gameState) {
+  if (!gameState) {
     return (
       <div className="screen active chess-screen">
         <p style={{ textAlign: 'center', color: 'var(--text2)', padding: '2rem 0' }}>
-          Sincronizando partida...
+          {loadError || (loading ? 'Sincronizando partida...' : 'Não foi possível carregar a partida')}
         </p>
       </div>
     );

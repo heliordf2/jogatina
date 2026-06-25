@@ -42,12 +42,25 @@ export function getTurnPlayer(row) {
   return chess.turn() === 'w' ? row.white_player : row.black_player;
 }
 
+export function normalizeMoves(moves) {
+  if (Array.isArray(moves)) return moves;
+  if (typeof moves === 'string') {
+    try {
+      const parsed = JSON.parse(moves);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export function formatChessGame(row) {
   const chess = new Chess(row.fen);
   return {
     id: row.id,
     fen: row.fen,
-    moves: row.moves ?? [],
+    moves: normalizeMoves(row.moves),
     whitePlayer: row.white_player,
     blackPlayer: row.black_player,
     turn: chess.turn(),

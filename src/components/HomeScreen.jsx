@@ -13,12 +13,12 @@ export default function HomeScreen({
   onStartCollab,
   onShowRanking,
   onBack,
-  onSwitchPlayer,
+  joiningCollab = false,
 }) {
   const playerDetail =
     mode === 'solo'
       ? `${scores[onlinePlayer].total} pts total`
-      : 'com o dispositivo';
+      : 'duelo online';
 
   return (
     <div className="screen active">
@@ -79,17 +79,14 @@ export default function HomeScreen({
         </div>
       ) : (
         <div>
-          <button type="button" className="btn" style={{ width: '100%', marginBottom: '.75rem' }} onClick={onSwitchPlayer}>
-            👤 Trocar jogador com o dispositivo
-          </button>
           <div className="info-box">
-            <h3>🤝 Duelo em turnos:</h3>
+            <h3>🌐 Duelo online:</h3>
             <p>
-              Helio e Thamy jogam no <strong>mesmo dispositivo</strong>, passando um para o outro.
+              Helio e Thamy jogam em <strong>dispositivos diferentes</strong>, no mesmo tabuleiro sincronizado.
               <br />
               ✅ Certo: <strong>+10 pts</strong> &nbsp;❌ Errado: <strong>-5 pts</strong>
               <br />
-              Cada um só joga na <strong>sua vez</strong> — troque o jogador online ao passar o aparelho.
+              Quem inicia cria o puzzle — o outro entra na mesma partida ao clicar em Iniciar.
             </p>
           </div>
           <div className="diff-label">Dificuldade:</div>
@@ -108,8 +105,13 @@ export default function HomeScreen({
               </button>
             ))}
           </div>
-          <button type="button" className="btn btn-primary" onClick={onStartCollab}>
-            ⚔️ Iniciar Duelo
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onStartCollab}
+            disabled={joiningCollab}
+          >
+            {joiningCollab ? 'Conectando...' : '⚔️ Iniciar / Entrar no Duelo'}
           </button>
         </div>
       )}

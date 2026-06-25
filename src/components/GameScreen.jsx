@@ -20,7 +20,6 @@ export default function GameScreen({
   remotePresence,
   progress,
   onGoHome,
-  onSwitchPlayer,
   onSelectCell,
   onEnterNum,
   onToggleDraft,
@@ -76,11 +75,8 @@ export default function GameScreen({
             <span>{PLAYER_NAMES[turn]}</span> — sua vez!
           </div>
           <div className="turn-right">
-            {turn === onlinePlayer ? 'Sua vez — jogue!' : `Vez de ${PLAYER_NAMES[turn]}`}
+            {turn === onlinePlayer ? 'Sua vez — jogue!' : `Aguardando ${PLAYER_NAMES[turn]}`}
           </div>
-          <button type="button" className="turn-lock-btn unlocked" style={{ marginRight: 4 }} onClick={onSwitchPlayer}>
-            👤 Trocar
-          </button>
           {isMyTurn && (
             <button
               type="button"
