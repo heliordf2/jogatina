@@ -188,7 +188,7 @@ async function recordCollabWinStats(client, dbRow, state) {
   const timer = computeTimer(dbRow);
   const timeStr = formatTime(timer);
   const playedDate = new Date().toLocaleDateString('pt-BR');
-  const scores = state.collab_scores;
+  const scores = state.collabScores ?? state.collab_scores;
 
   for (const playerId of ['helio', 'thamy']) {
     const pts = scores[playerId] ?? 0;
@@ -291,35 +291,35 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
     const next = {
       ...state,
       board: state.board.map((row) => [...row]),
-      collab_scores: { ...state.collab_scores },
-      collab_cells: {
-        helio: [...state.collab_cells.helio],
-        thamy: [...state.collab_cells.thamy],
+      collabScores: { ...state.collabScores },
+      collabCells: {
+        helio: [...state.collabCells.helio],
+        thamy: [...state.collabCells.thamy],
       },
       ...timerPatch,
-      turn_locked: false,
+      turnLocked: false,
     };
 
     let chatMessage = null;
 
     if (n === 0) {
       next.board[r][c] = 0;
-      next.collab_cells.helio = next.collab_cells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
-      next.collab_cells.thamy = next.collab_cells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
+      next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
+      next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
     } else {
       const correct = n === next.solution[r][c];
       const actor = strictTurn ? next.collabTurn : player;
       next.board[r][c] = n;
-      next.collab_cells.helio = next.collab_cells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
-      next.collab_cells.thamy = next.collab_cells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
-      next.collab_cells[actor] = [...next.collab_cells[actor], [r, c]];
+      next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
+      next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
+      next.collabCells[actor] = [...next.collabCells[actor], [r, c]];
 
       if (correct) {
-        next.collab_scores[actor] = next.collab_scores[actor] + 10;
+        next.collabScores[actor] = next.collabScores[actor] + 10;
         next.corrects += 1;
         chatMessage = `${actor === 'helio' ? '🟣 Helio' : '🩷 Thamy'} acertou +10! ✅`;
       } else {
-        next.collab_scores[actor] = Math.max(0, next.collab_scores[actor] - 5);
+        next.collabScores[actor] = Math.max(0, next.collabScores[actor] - 5);
         next.errors += 1;
         chatMessage = `❌ ${actor === 'helio' ? 'Helio' : 'Thamy'} errou -5pts`;
       }
@@ -338,12 +338,12 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
     const updated = await updateGameRow(client, dbRow, {
       board: next.board,
       collab_turn: next.collabTurn,
-      collab_scores: next.collab_scores,
-      collab_cells: next.collab_cells,
+      collab_scores: next.collabScores,
+      collab_cells: next.collabCells,
       errors: next.errors,
       corrects: next.corrects,
       hints: next.hints,
-      turn_locked: next.turn_locked,
+      turn_locked: next.turnLocked,
       paused: next.paused,
       timer_seconds: next.timer_seconds,
       timer_started_at: next.timer_started_at,
@@ -352,7 +352,7 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
 
     if (status === 'won') {
       await recordCollabWinStats(client, updated, {
-        collab_scores: next.collab_scores,
+        collabScores: next.collabScores,
       });
     }
 
@@ -385,8 +385,8 @@ export async function toggleSudokuCollabTurnLock({ player, locked }) {
     const updated = await updateGameRow(client, dbRow, {
       board: state.board,
       collab_turn: state.collabTurn,
-      collab_scores: state.collab_scores,
-      collab_cells: state.collab_cells,
+      collab_scores: state.collabScores,
+      collab_cells: state.collabCells,
       errors: state.errors,
       corrects: state.corrects,
       hints: state.hints,
@@ -444,19 +444,19 @@ export async function applySudokuCollabHint({ player }) {
     const next = {
       ...state,
       board: state.board.map((row) => [...row]),
-      collab_scores: { ...state.collab_scores },
-      collab_cells: {
-        helio: [...state.collab_cells.helio],
-        thamy: [...state.collab_cells.thamy],
+      collabScores: { ...state.collabScores },
+      collabCells: {
+        helio: [...state.collabCells.helio],
+        thamy: [...state.collabCells.thamy],
       },
       ...timerPatch,
       hints: state.hints - 1,
       corrects: state.corrects + 1,
-      turn_locked: false,
+      turnLocked: false,
     };
 
     next.board[r][c] = next.solution[r][c];
-    next.collab_cells[player] = [...next.collab_cells[player], [r, c]];
+    next.collabCells[player] = [...next.collabCells[player], [r, c]];
     if (strictTurn) {
       next.collabTurn = player === 'helio' ? 'thamy' : 'helio';
     }
@@ -470,12 +470,12 @@ export async function applySudokuCollabHint({ player }) {
     const updated = await updateGameRow(client, dbRow, {
       board: next.board,
       collab_turn: next.collabTurn,
-      collab_scores: next.collab_scores,
-      collab_cells: next.collab_cells,
+      collab_scores: next.collabScores,
+      collab_cells: next.collabCells,
       errors: next.errors,
       corrects: next.corrects,
       hints: next.hints,
-      turn_locked: next.turn_locked,
+      turn_locked: next.turnLocked,
       paused: next.paused,
       timer_seconds: next.timer_seconds,
       timer_started_at: next.timer_started_at,
@@ -484,7 +484,7 @@ export async function applySudokuCollabHint({ player }) {
 
     if (status === 'won') {
       await recordCollabWinStats(client, updated, {
-        collab_scores: next.collab_scores,
+        collabScores: next.collabScores,
       });
     }
 
@@ -526,12 +526,12 @@ export async function toggleSudokuCollabPause({ player, paused }) {
     const updated = await updateGameRow(client, dbRow, {
       board: state.board,
       collab_turn: state.collabTurn,
-      collab_scores: state.collab_scores,
-      collab_cells: state.collab_cells,
+      collab_scores: state.collabScores,
+      collab_cells: state.collabCells,
       errors: state.errors,
       corrects: state.corrects,
       hints: state.hints,
-      turn_locked: state.turn_locked,
+      turn_locked: state.turnLocked,
       paused: Boolean(paused),
       timer_seconds: timerSeconds,
       timer_started_at: timerStartedAt,
