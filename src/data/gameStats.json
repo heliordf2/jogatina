@@ -1,0 +1,10 @@
+{
+  "sudoku": {
+    "helio": { "total": 0, "games": 0, "best": null, "history": [] },
+    "thamy": { "total": 0, "games": 0, "best": null, "history": [] }
+  },
+  "chess": {
+    "helio": { "wins": 0, "losses": 0, "draws": 0, "games": 0 },
+    "thamy": { "wins": 0, "losses": 0, "draws": 0, "games": 0 }
+  }
+}

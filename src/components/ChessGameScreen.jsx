@@ -10,6 +10,7 @@ import {
   getChessWinner,
   PIECE_SYMBOLS,
 } from '../utils/chessHelpers.js';
+import { recordChessResult } from '../utils/gameStats.js';
 import { playCaptureSound, playCheckSound, playMoveSound, unlockAudio } from '../utils/chessSounds.js';
 
 const MOVE_HIGHLIGHT = 'radial-gradient(circle, rgba(16, 185, 129, 0.55) 22%, transparent 22%)';
@@ -59,6 +60,7 @@ export default function ChessGameScreen({
   const [gameState, setGameState] = useState(createInitialState);
   const [selectedSquare, setSelectedSquare] = useState(null);
   const prevMovesCount = useRef(0);
+  const recordedResultRef = useRef(false);
 
   const activePlayer = gameState.turn === 'w' ? 'helio' : 'thamy';
   const isMyTurn = myself === activePlayer;
@@ -78,6 +80,14 @@ export default function ChessGameScreen({
   useEffect(() => {
     unlockAudio();
   }, []);
+
+  useEffect(() => {
+    if (!gameState.winner || recordedResultRef.current) return;
+    if (!['checkmate', 'draw'].includes(gameState.status)) return;
+
+    recordedResultRef.current = true;
+    recordChessResult(gameState.winner);
+  }, [gameState.winner, gameState.status]);
 
   useEffect(() => {
     const moves = gameState.moves || [];
@@ -227,6 +237,7 @@ export default function ChessGameScreen({
     setGameState(createInitialState());
     setSelectedSquare(null);
     prevMovesCount.current = 0;
+    recordedResultRef.current = false;
     onSystemMessage('♟️ Nova partida iniciada!');
   }
 

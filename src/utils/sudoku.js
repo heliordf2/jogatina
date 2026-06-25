@@ -62,3 +62,11 @@ export function getBoxNums(board, r, c) {
   }
   return used;
 }
+
+export function isCellLocked(game, r, c) {
+  return (
+    !game.given[r][c] &&
+    game.board[r][c] !== 0 &&
+    game.board[r][c] === game.solution[r][c]
+  );
+}

@@ -1,4 +1,4 @@
-import { getBoxNums } from '../utils/sudoku.js';
+import { getBoxNums, isCellLocked } from '../utils/sudoku.js';
 
 export default function SudokuGrid({ game, onSelectCell }) {
   const { board, solution, given, selected, isCollab, collabCells, drafts } = game;
@@ -11,6 +11,7 @@ export default function SudokuGrid({ game, onSelectCell }) {
           if (c % 3 === 2 && c !== 8) classes.push('border-r');
           if (r % 3 === 2 && r !== 8) classes.push('border-b');
           if (given[r][c]) classes.push('given');
+          else if (isCellLocked(game, r, c)) classes.push('locked');
           if (selected && selected[0] === r && selected[1] === c) classes.push('selected');
           else if (
             selected &&

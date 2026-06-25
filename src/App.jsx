@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import './App.css';
 import './chess.css';
 import ChessApp from './ChessApp.jsx';
+import GameStatsPanel from './components/GameStatsPanel.jsx';
 import MainPicker from './components/MainPicker.jsx';
 import SharedChat from './components/SharedChat.jsx';
 import Toast from './components/Toast.jsx';
@@ -112,6 +113,7 @@ export default function App() {
             onChatFocusChange={chatProps.onChatFocusChange}
             title="💬 Chat"
           />
+          <GameStatsPanel />
         </div>
       ) : game === 'sudoku' ? (
         <SudokuApp

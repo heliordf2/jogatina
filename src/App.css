@@ -144,6 +144,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .cell.highlight{background:var(--surface1)}
 .cell.error{color:#E24B4A;font-weight:600}
 .cell.correct{color:var(--c2);font-weight:500}
+.cell.locked{cursor:default}
 .cell.collab-h{color:#534AB7;font-weight:600}
 .cell.collab-t{color:#993556;font-weight:600}
 .cell.border-r{border-right:2.5px solid var(--text)}
@@ -223,4 +224,25 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .game-card-desc{font-size:12px;color:var(--text2);line-height:1.5}
 .player-card-static{cursor:default}
 .player-card-static:hover{transform:none;box-shadow:none}
+
+/* ===== GAME STATS (HOME) ===== */
+.stats-panel{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface)}
+.stats-header{background:var(--surface1);border-bottom:1px solid var(--border);padding:.6rem 1rem;font-size:13px;font-weight:600}
+.stats-game-block{padding:.75rem 1rem;border-bottom:1px solid var(--border)}
+.stats-game-block:last-child{border-bottom:none}
+.stats-game-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.03em}
+.stats-player-block+.stats-player-block{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+.stats-player-row{display:flex;align-items:center;gap:10px;padding:.45rem 0}
+.stats-player-row+.stats-player-row{border-top:1px solid var(--border)}
+.stats-history{margin-top:.5rem;display:flex;flex-direction:column;gap:.4rem}
+.stats-history-empty{font-size:12px;color:var(--text3);padding:.25rem 0 .5rem}
+.stats-history-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface1);border:1px solid var(--border);border-radius:8px;padding:.45rem .65rem}
+.stats-history-meta{font-size:12px;font-weight:500}
+.stats-history-time{font-size:11px;color:var(--text2);margin-top:2px}
+.stats-history-pts{font-size:14px;font-weight:700;white-space:nowrap;margin-left:8px}
+.stats-player-av{width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0}
+.stats-player-av img{width:100%;height:100%;object-fit:cover}
+.stats-player-info{flex:1;min-width:0}
+.stats-player-name{font-size:14px;font-weight:600}
+.stats-player-detail{font-size:12px;color:var(--text2);margin-top:2px}
 @media(max-width:520px){.game-picker{grid-template-columns:1fr}}

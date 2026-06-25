@@ -14,8 +14,9 @@ import {
   DIFF_NAMES,
   PLAYER_NAMES,
 } from './data/constants.js';
+import { syncSudokuStats } from './utils/gameStats.js';
 import { loadScores, saveScores } from './utils/scores.js';
-import { generateSudoku } from './utils/sudoku.js';
+import { generateSudoku, isCellLocked } from './utils/sudoku.js';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -187,6 +188,7 @@ export default function SudokuApp({
           if (next.helio.history.length > 20) next.helio.history.pop();
           if (next.thamy.history.length > 20) next.thamy.history.pop();
           saveScores(next);
+          syncSudokuStats(next);
           return next;
         });
 
@@ -223,6 +225,7 @@ export default function SudokuApp({
           });
           if (p.history.length > 20) p.history.pop();
           saveScores(next);
+          syncSudokuStats(next);
           return next;
         });
 
@@ -247,7 +250,7 @@ export default function SudokuApp({
   const selectCell = useCallback(
     (r, c) => {
       setGame((g) => {
-        if (g.given[r][c]) return g;
+        if (g.given[r][c] || isCellLocked(g, r, c)) return g;
         if (g.isCollab && g.collabTurn !== myself) {
           if (g.turnLocked) {
             showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
@@ -270,7 +273,7 @@ export default function SudokuApp({
           return g;
         }
         const [r, c] = g.selected;
-        if (g.given[r][c]) return g;
+        if (g.given[r][c] || isCellLocked(g, r, c)) return g;
         if (g.isCollab && g.collabTurn !== myself) {
           showToast('🔒 Não é sua vez!');
           return g;
