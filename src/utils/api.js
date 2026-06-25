@@ -1,4 +1,8 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
+function devOnlyHint(devText, prodText) {
+  return import.meta.env.DEV ? devText : prodText;
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -9,16 +13,34 @@ async function request(path, options = {}) {
     ...options,
   });
 
+  const body = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
     if (response.status === 404) {
-      throw new Error(body.error || 'Rota não encontrada — reinicie o servidor (npm run dev)');
+      throw new Error(
+        body.error ||
+          devOnlyHint(
+            'Rota não encontrada — reinicie com npm run dev',
+            'Recurso não encontrado no servidor',
+          ),
+      );
     }
     throw new Error(body.error || `Erro na API (${response.status})`);
   }
 
   if (response.status === 204) return null;
-  return response.json();
+  return body;
+}
+
+export async function checkApiHealth() {
+  const response = await fetch(`${API_BASE}/health`, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || `Erro na API (${response.status})`);
+  }
+  return body;
 }
 
 export function fetchGameStats() {
@@ -41,10 +63,6 @@ export function saveSudokuScoresApi(scores) {
     method: 'PUT',
     body: JSON.stringify(scores),
   });
-}
-
-export function checkApiHealth() {
-  return request('/health');
 }
 
 export function recordGameStartApi({ player, game, mode = null }) {

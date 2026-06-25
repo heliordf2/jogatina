@@ -103,11 +103,21 @@ export default function App() {
     checkApiHealth()
       .then((health) => {
         if (!health?.features?.includes('chat')) {
-          showToast('Servidor desatualizado — reinicie com npm run dev', 4000);
+          showToast(
+            import.meta.env.DEV
+              ? 'Servidor desatualizado — reinicie com npm run dev'
+              : 'Servidor desatualizado — faça um novo deploy',
+            4000,
+          );
         }
       })
-      .catch(() => {
-        showToast('API offline — rode npm run dev', 4000);
+      .catch((error) => {
+        const message = import.meta.env.DEV
+          ? 'API offline — rode npm run dev'
+          : error?.message?.includes('DATABASE') || error?.message?.includes('banco')
+            ? 'Erro ao conectar ao banco de dados'
+            : 'Servidor indisponível — verifique se npm start está rodando';
+        showToast(message, 4000);
       });
   }, [showToast]);
 
@@ -128,10 +138,11 @@ export default function App() {
       });
     } catch (error) {
       if (!silent) {
-        const hint =
-          error.message?.includes('404') || error.message?.includes('API')
+        const hint = import.meta.env.DEV
+          ? error.message?.includes('404') || error.message?.includes('API')
             ? 'Servidor desatualizado — reinicie com npm run dev'
-            : 'Não foi possível enviar a mensagem';
+            : 'Não foi possível enviar a mensagem'
+          : 'Não foi possível enviar a mensagem';
         showToast(hint);
       }
     }

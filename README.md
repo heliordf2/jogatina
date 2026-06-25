@@ -45,7 +45,20 @@ Schema em `server/schema.sql`.
 - `npm run client` — só o frontend
 - `npm run build` — build de produção
 - `npm run preview` — preview do build
-- `npm start` — API em produção
+- `npm start` — produção (build + API servindo o frontend)
+
+### Produção
+
+O app precisa rodar o **servidor Node** (não só os arquivos estáticos de `dist/`):
+
+```bash
+npm install
+npm start
+```
+
+Configure `DATABASE_URL` no ambiente. O `npm start` define `NODE_ENV=production`, gera o `dist/` se necessário e sobe a API na porta `PORT` (padrão 3001).
+
+Em plataformas como Render/Railway, use o comando de start: `npm start`.
 
 ### Sudoku
 - Modo **Solo** e **Colaborativo** (duelo em turnos no mesmo dispositivo)
