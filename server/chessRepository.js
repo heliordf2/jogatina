@@ -7,6 +7,7 @@ import {
   getChessWinner,
   getTurnPlayer,
   isActiveStatus,
+  isValidGameRow,
   rollChessColors,
 } from './chessLogic.js';
 
@@ -72,7 +73,15 @@ async function getActiveGameRow(client = pool) {
 export async function getActiveChessGame() {
   const row = await getActiveGameRow();
   if (!row) return null;
-  return formatChessGame(row);
+  const game = formatChessGame(row);
+  if (!game) {
+    await pool.query(
+      `UPDATE chess_games SET status = 'abandoned', updated_at = NOW() WHERE id = $1`,
+      [row.id],
+    );
+    return null;
+  }
+  return game;
 }
 
 export async function getOrCreateChessGame({ player, forceNew = false }) {
@@ -84,8 +93,16 @@ export async function getOrCreateChessGame({ player, forceNew = false }) {
 
     const existing = await getActiveGameRow(client);
     if (existing && !forceNew) {
-      await client.query('COMMIT');
-      return formatChessGame(existing);
+      if (!isValidGameRow(existing)) {
+        await client.query(
+          `UPDATE chess_games SET status = 'abandoned', updated_at = NOW() WHERE id = $1`,
+          [existing.id],
+        );
+      } else {
+        await client.query('COMMIT');
+        const game = formatChessGame(existing);
+        if (game) return game;
+      }
     }
 
     if (existing && forceNew) {
@@ -117,7 +134,9 @@ export async function getOrCreateChessGame({ player, forceNew = false }) {
     );
 
     await client.query('COMMIT');
-    return formatChessGame(inserted.rows[0]);
+    const game = formatChessGame(inserted.rows[0]);
+    if (!game) throw new Error('Falha ao criar partida');
+    return game;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -181,7 +200,9 @@ export async function applyChessMove({ player, from, to, promotion = 'q' }) {
 
     const nextRow = await updateGameState(client, row, chess);
     await client.query('COMMIT');
-    return formatChessGame(nextRow);
+    const game = formatChessGame(nextRow);
+    if (!game) throw new Error('Estado da partida inválido');
+    return game;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

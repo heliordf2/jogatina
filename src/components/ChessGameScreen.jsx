@@ -5,6 +5,7 @@ import IMGS from '../assets/imgs.js';
 import { PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
 import CurrentPlayerBar from './CurrentPlayerBar.jsx';
 import OtherPlayerBar from './OtherPlayerBar.jsx';
+import ChessboardBoundary from './ChessboardBoundary.jsx';
 import {
   createOrJoinChessGame,
   fetchActiveChessGame,
@@ -16,6 +17,7 @@ import {
   getCapturedPiecesFromMoves,
   normalizeMoves,
   PIECE_SYMBOLS,
+  safeChess,
 } from '../utils/chessHelpers.js';
 import { playCaptureSound, playCheckSound, playMoveSound, unlockAudio } from '../utils/chessSounds.js';
 
@@ -23,6 +25,7 @@ const MOVE_HIGHLIGHT = 'radial-gradient(circle, rgba(16, 185, 129, 0.55) 22%, tr
 const CAPTURE_HIGHLIGHT = 'radial-gradient(circle, rgba(16, 185, 129, 0.5) 82%, transparent 82%)';
 const SELECTED_HIGHLIGHT = 'rgba(16, 185, 129, 0.45)';
 const POLL_MS = 1500;
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 function CapturedPanel({ label, pieces, color }) {
   return (
@@ -50,16 +53,17 @@ function isValidGame(game) {
       typeof game.id === 'number' &&
       typeof game.fen === 'string' &&
       game.whitePlayer &&
-      game.blackPlayer,
+      game.blackPlayer &&
+      safeChess(Chess, game.fen),
   );
 }
 
 function mapServerGame(game) {
-  if (!isValidGame(game)) {
-    throw new Error('Dados da partida inválidos');
-  }
+  if (!isValidGame(game)) return null;
 
-  const chess = new Chess(game.fen);
+  const chess = safeChess(Chess, game.fen);
+  if (!chess) return null;
+
   return {
     id: game.id,
     fen: game.fen,
@@ -74,7 +78,25 @@ function mapServerGame(game) {
 }
 
 function isPlayingStatus(status) {
-  return !['checkmate', 'draw', 'resigned'].includes(status);
+  return !['checkmate', 'draw', 'resigned', 'abandoned'].includes(status);
+}
+
+function ErrorPanel({ message, onRetry, onGoHome }) {
+  return (
+    <div className="screen active chess-screen">
+      <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+        <p style={{ color: 'var(--text2)', marginBottom: '1rem' }}>{message}</p>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-primary" onClick={onRetry}>
+            🔄 Tentar novamente
+          </button>
+          <button type="button" className="btn" onClick={onGoHome}>
+            🏠 Voltar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ChessGameScreen({
@@ -83,6 +105,7 @@ export default function ChessGameScreen({
   initialGame,
   onGoHome,
   onSystemMessage,
+  onGameUpdate,
   showToast,
 }) {
   const myself = onlinePlayer;
@@ -90,29 +113,36 @@ export default function ChessGameScreen({
   const lastVersionRef = useRef(0);
   const prevMovesCount = useRef(0);
   const announcedEndRef = useRef(false);
+  const hadGameRef = useRef(false);
 
-  const [gameState, setGameState] = useState(() => {
-    if (!initialGame) return null;
-    try {
-      return mapServerGame(initialGame);
-    } catch {
-      return null;
-    }
-  });
+  const [gameState, setGameState] = useState(() => mapServerGame(initialGame));
+  const gameStateRef = useRef(gameState);
   const [loading, setLoading] = useState(!initialGame);
-  const [loadError, setLoadError] = useState(
-    initialGame && !isValidGame(initialGame) ? 'Não foi possível carregar a partida' : null,
-  );
+  const [loadError, setLoadError] = useState(() => {
+    if (!initialGame) return null;
+    return mapServerGame(initialGame) ? null : 'Não foi possível carregar a partida';
+  });
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [moving, setMoving] = useState(false);
 
-  const applyServerGame = useCallback((game) => {
-    if (!game) return;
-    const mapped = mapServerGame(game);
-    chessRef.current = new Chess(mapped.fen);
-    lastVersionRef.current = mapped.version;
-    setGameState(mapped);
-  }, []);
+  const applyServerGame = useCallback(
+    (game) => {
+      if (!game) return false;
+      const mapped = mapServerGame(game);
+      if (!mapped) {
+        setLoadError('Dados da partida inválidos no servidor');
+        return false;
+      }
+      chessRef.current = safeChess(Chess, mapped.fen) ?? new Chess(START_FEN);
+      lastVersionRef.current = mapped.version;
+      hadGameRef.current = true;
+      setGameState(mapped);
+      setLoadError(null);
+      onGameUpdate?.(game);
+      return true;
+    },
+    [onGameUpdate],
+  );
 
   const announceTerminalState = useCallback(
     (mapped) => {
@@ -135,11 +165,35 @@ export default function ChessGameScreen({
     [onSystemMessage],
   );
 
+  const retryLoad = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const game = await fetchActiveChessGame();
+      if (game && applyServerGame(game)) return;
+
+      const created = await createOrJoinChessGame({
+        player: myself,
+        forceNew: true,
+      });
+      if (!applyServerGame(created)) {
+        setLoadError('Não foi possível iniciar uma nova partida');
+      }
+    } catch (error) {
+      setLoadError(error.message || 'Não foi possível carregar a partida');
+    } finally {
+      setLoading(false);
+    }
+  }, [applyServerGame, myself]);
+
   useEffect(() => {
-    if (initialGame) {
+    if (!initialGame) return;
+    const mapped = mapServerGame(initialGame);
+    if (mapped) {
       applyServerGame(initialGame);
-      chessRef.current = new Chess(initialGame.fen);
-      lastVersionRef.current = initialGame.version;
+      setLoading(false);
+    } else {
+      setLoadError('Não foi possível carregar a partida');
       setLoading(false);
     }
   }, [applyServerGame, initialGame]);
@@ -149,20 +203,36 @@ export default function ChessGameScreen({
   }, []);
 
   useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function sync() {
       try {
         const game = await fetchActiveChessGame();
-        if (cancelled || !game) return;
+        if (cancelled) return;
+
+        if (!game) {
+          const current = gameStateRef.current;
+          if (hadGameRef.current && current && isPlayingStatus(current.status)) {
+            setLoadError('A partida foi encerrada no servidor');
+          }
+          return;
+        }
+
         if (game.version !== lastVersionRef.current) {
           const mapped = mapServerGame(game);
+          if (!mapped) {
+            setLoadError('Dados da partida inválidos no servidor');
+            return;
+          }
           applyServerGame(game);
           announceTerminalState(mapped);
         }
-        if (!cancelled) setLoadError(null);
       } catch {
-        if (!cancelled && !initialGame) {
+        if (!cancelled && !hadGameRef.current) {
           setLoadError('Não foi possível sincronizar a partida');
         }
       } finally {
@@ -176,7 +246,7 @@ export default function ChessGameScreen({
       cancelled = true;
       clearInterval(id);
     };
-  }, [announceTerminalState, applyServerGame, initialGame]);
+  }, [announceTerminalState, applyServerGame]);
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -189,18 +259,23 @@ export default function ChessGameScreen({
       return;
     }
 
-    const chess = new Chess();
-    for (let i = 0; i < moves.length - 1; i += 1) {
-      chess.move(moves[i]);
-    }
-    const lastMove = chess.move(moves[moves.length - 1]);
-
-    if (lastMove) {
-      if (lastMove.captured) playCaptureSound();
-      else playMoveSound();
-      if (chess.inCheck()) {
-        setTimeout(() => playCheckSound(), lastMove.captured ? 130 : 70);
+    try {
+      const chess = new Chess();
+      for (let i = 0; i < moves.length - 1; i += 1) {
+        const moved = chess.move(moves[i]);
+        if (!moved) return;
       }
+      const lastMove = chess.move(moves[moves.length - 1]);
+
+      if (lastMove) {
+        if (lastMove.captured) playCaptureSound();
+        else playMoveSound();
+        if (chess.inCheck()) {
+          setTimeout(() => playCheckSound(), lastMove.captured ? 130 : 70);
+        }
+      }
+    } catch {
+      // ignora erros de replay de som
     }
 
     prevMovesCount.current = moves.length;
@@ -220,8 +295,13 @@ export default function ChessGameScreen({
 
   const legalMoves = useMemo(() => {
     if (!selectedSquare || !isMyTurn || !isPlaying || !gameState) return [];
-    const chess = new Chess(gameState.fen);
-    return chess.moves({ square: selectedSquare, verbose: true });
+    const chess = safeChess(Chess, gameState.fen);
+    if (!chess) return [];
+    try {
+      return chess.moves({ square: selectedSquare, verbose: true });
+    } catch {
+      return [];
+    }
   }, [selectedSquare, gameState, isMyTurn, isPlaying]);
 
   const squareStyles = useMemo(() => {
@@ -238,7 +318,8 @@ export default function ChessGameScreen({
 
   function isOwnPiece(square) {
     if (!gameState) return false;
-    const chess = new Chess(gameState.fen);
+    const chess = safeChess(Chess, gameState.fen);
+    if (!chess) return false;
     const piece = chess.get(square);
     return piece?.color === myPieceColor;
   }
@@ -254,7 +335,10 @@ export default function ChessGameScreen({
     setMoving(true);
     try {
       const game = await postChessMove({ player: myself, from, to, promotion: 'q' });
-      applyServerGame(game);
+      if (!applyServerGame(game)) {
+        showToast('Resposta inválida do servidor');
+        return false;
+      }
       return true;
     } catch (error) {
       showToast(error.message);
@@ -306,13 +390,15 @@ export default function ChessGameScreen({
     setSelectedSquare(square);
   }
 
-  async function handleDrop({ sourceSquare, targetSquare }) {
+  function handleDrop({ sourceSquare, targetSquare }) {
     if (!targetSquare || !isMyTurn || !isPlaying || !gameState) {
       setSelectedSquare(null);
       return false;
     }
 
-    const chess = new Chess(gameState.fen);
+    const chess = safeChess(Chess, gameState.fen);
+    if (!chess) return false;
+
     const move = chess.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
     if (!move) {
       setSelectedSquare(null);
@@ -328,8 +414,11 @@ export default function ChessGameScreen({
     if (!isPlaying || !myself) return;
     try {
       const game = await postChessResign({ player: myself });
-      applyServerGame(game);
-      announceTerminalState(mapServerGame(game));
+      const mapped = mapServerGame(game);
+      if (mapped) {
+        applyServerGame(game);
+        announceTerminalState(mapped);
+      }
     } catch (error) {
       showToast(error.message);
     }
@@ -341,7 +430,10 @@ export default function ChessGameScreen({
       const game = await createOrJoinChessGame({ player: myself, forceNew: true });
       announcedEndRef.current = false;
       prevMovesCount.current = 0;
-      applyServerGame(game);
+      if (!applyServerGame(game)) {
+        showToast('Não foi possível criar nova partida');
+        return;
+      }
       onSystemMessage?.(
         `🎲 Nova partida online! ${PLAYER_NAMES[game.whitePlayer]} com as brancas, ${PLAYER_NAMES[game.blackPlayer]} com as pretas.`,
       );
@@ -370,11 +462,17 @@ export default function ChessGameScreen({
 
   if (!gameState) {
     return (
-      <div className="screen active chess-screen">
-        <p style={{ textAlign: 'center', color: 'var(--text2)', padding: '2rem 0' }}>
-          {loadError || (loading ? 'Sincronizando partida...' : 'Não foi possível carregar a partida')}
-        </p>
-      </div>
+      <ErrorPanel
+        message={loadError || (loading ? 'Sincronizando partida...' : 'Não foi possível carregar a partida')}
+        onRetry={retryLoad}
+        onGoHome={onGoHome}
+      />
+    );
+  }
+
+  if (loadError && !isPlayingStatus(gameState.status)) {
+    return (
+      <ErrorPanel message={loadError} onRetry={retryLoad} onGoHome={onGoHome} />
     );
   }
 
@@ -389,6 +487,12 @@ export default function ChessGameScreen({
         <div className="game-title">♟️ Helio vs Thamy</div>
         <div style={{ width: 64 }} />
       </div>
+
+      {loadError && (
+        <p className="chess-status-msg" style={{ color: 'var(--text2)' }}>
+          ⚠️ {loadError}
+        </p>
+      )}
 
       <div className={`turn-banner turn-${activePlayer}`}>
         <div className="turn-left">
@@ -437,27 +541,39 @@ export default function ChessGameScreen({
           color="black"
         />
         <div className="board-container">
-          <Chessboard
-            key={`${gameState.fen}-${myself ?? 'guest'}-${gameState.whitePlayer}-${gameState.version}`}
-            options={{
-              position: gameState.fen,
-              boardOrientation,
-              allowDragging: isMyTurn && isPlaying && !moving,
-              canDragPiece: ({ square }) =>
-                isMyTurn && isPlaying && !moving && isOwnPiece(square),
-              onPieceClick: handlePieceClick,
-              onSquareClick: handleSquareClick,
-              onPieceDrag: handlePieceDrag,
-              onPieceDrop: handleDrop,
-              squareStyles,
-              boardStyle: {
-                borderRadius: '8px',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              },
-              darkSquareStyle: { backgroundColor: '#b58863' },
-              lightSquareStyle: { backgroundColor: '#f0d9b5' },
-            }}
-          />
+          <ChessboardBoundary
+            resetKey={`${gameState.id}-${gameState.version}`}
+            fallback={
+              <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text2)' }}>
+                <p>Não foi possível exibir o tabuleiro.</p>
+                <button type="button" className="btn btn-primary" style={{ marginTop: '0.75rem' }} onClick={retryLoad}>
+                  🔄 Recarregar partida
+                </button>
+              </div>
+            }
+          >
+            <Chessboard
+              key={`${gameState.id}-${gameState.version}-${myself ?? 'guest'}`}
+              options={{
+                position: gameState.fen,
+                boardOrientation,
+                allowDragging: isMyTurn && isPlaying && !moving,
+                canDragPiece: ({ square }) =>
+                  isMyTurn && isPlaying && !moving && isOwnPiece(square),
+                onPieceClick: handlePieceClick,
+                onSquareClick: handleSquareClick,
+                onPieceDrag: handlePieceDrag,
+                onPieceDrop: handleDrop,
+                squareStyles,
+                boardStyle: {
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                },
+                darkSquareStyle: { backgroundColor: '#b58863' },
+                lightSquareStyle: { backgroundColor: '#f0d9b5' },
+              }}
+            />
+          </ChessboardBoundary>
         </div>
         <CapturedPanel
           label={PLAYER_NAMES[gameState.whitePlayer]}

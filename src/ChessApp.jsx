@@ -33,7 +33,7 @@ export default function ChessApp({
       setActiveGame(game);
       recordGameStart(onlinePlayer, 'chess');
 
-      if (game.moves.length === 0) {
+      if (game.moves?.length === 0) {
         addChatMsg(
           'system',
           null,
@@ -68,15 +68,25 @@ export default function ChessApp({
         />
       )}
 
-      {screen === 'game' && (
+      {screen === 'game' && activeGame && (
         <ChessGameScreen
+          key={activeGame.id}
           onlinePlayer={onlinePlayer}
           remotePresence={remotePresence}
           initialGame={activeGame}
           onGoHome={goHome}
+          onGameUpdate={setActiveGame}
           onSystemMessage={(text) => addChatMsg('system', null, text)}
           showToast={showToast}
         />
+      )}
+
+      {screen === 'game' && !activeGame && (
+        <div className="screen active">
+          <p style={{ textAlign: 'center', color: 'var(--text2)', padding: '2rem 0' }}>
+            Carregando partida...
+          </p>
+        </div>
       )}
 
       {(screen === 'home' || screen === 'game') && (

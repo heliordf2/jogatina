@@ -25,7 +25,8 @@ function isValidChessGame(game) {
       typeof game.id === 'number' &&
       typeof game.fen === 'string' &&
       game.whitePlayer &&
-      game.blackPlayer,
+      game.blackPlayer &&
+      /^[rnbqkpRNBQKP1-8/\s]+\s[wb]\s/.test(game.fen),
   );
 }
 
@@ -177,6 +178,11 @@ export function postChessMove({ player, from, to, promotion = 'q' }) {
   return request('/chess/game/move', {
     method: 'POST',
     body: JSON.stringify({ player, from, to, promotion }),
+  }).then((game) => {
+    if (!isValidChessGame(game)) {
+      throw new Error('Resposta inválida do servidor ao mover peça');
+    }
+    return game;
   });
 }
 
@@ -184,6 +190,11 @@ export function postChessResign({ player }) {
   return request('/chess/game/resign', {
     method: 'POST',
     body: JSON.stringify({ player }),
+  }).then((game) => {
+    if (!isValidChessGame(game)) {
+      throw new Error('Resposta inválida do servidor ao desistir');
+    }
+    return game;
   });
 }
 

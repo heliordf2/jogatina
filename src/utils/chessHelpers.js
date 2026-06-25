@@ -24,12 +24,16 @@ export function getCapturedPiecesFromMoves(Chess, moves = []) {
   const blackLost = [];
 
   for (const san of normalizeMoves(moves)) {
-    const move = chess.move(san);
-    if (!move?.captured) continue;
+    try {
+      const move = chess.move(san);
+      if (!move?.captured) continue;
 
-    const lost = { type: move.captured, color: move.color === 'w' ? 'b' : 'w' };
-    if (move.color === 'w') blackLost.push(lost);
-    else whiteLost.push(lost);
+      const lost = { type: move.captured, color: move.color === 'w' ? 'b' : 'w' };
+      if (move.color === 'w') blackLost.push(lost);
+      else whiteLost.push(lost);
+    } catch {
+      // ignora movimentos inválidos no histórico
+    }
   }
 
   const sortFn = (a, b) => PIECE_ORDER[a.type] - PIECE_ORDER[b.type];
@@ -37,6 +41,14 @@ export function getCapturedPiecesFromMoves(Chess, moves = []) {
     whiteLost: whiteLost.sort(sortFn),
     blackLost: blackLost.sort(sortFn),
   };
+}
+
+export function safeChess(Chess, fen) {
+  try {
+    return new Chess(fen);
+  } catch {
+    return null;
+  }
 }
 
 export { PIECE_SYMBOLS };

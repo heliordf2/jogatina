@@ -56,7 +56,15 @@ export function normalizeMoves(moves) {
 }
 
 export function formatChessGame(row) {
-  const chess = new Chess(row.fen);
+  if (!row?.fen) return null;
+
+  let chess;
+  try {
+    chess = new Chess(row.fen);
+  } catch {
+    return null;
+  }
+
   return {
     id: row.id,
     fen: row.fen,
@@ -70,4 +78,14 @@ export function formatChessGame(row) {
     createdBy: row.created_by,
     updatedAt: row.updated_at,
   };
+}
+
+export function isValidGameRow(row) {
+  if (!row?.fen || !row.white_player || !row.black_player) return false;
+  try {
+    new Chess(row.fen);
+    return true;
+  } catch {
+    return false;
+  }
 }
