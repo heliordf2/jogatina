@@ -49,16 +49,25 @@ Schema em `server/schema.sql`.
 
 ### Produção
 
-O app precisa rodar o **servidor Node** (não só os arquivos estáticos de `dist/`):
+#### Vercel (recomendado)
+
+1. Conecte o repositório na [Vercel](https://vercel.com)
+2. Em **Settings → Environment Variables**, adicione:
+   - `DATABASE_URL` — connection string do Neon/PostgreSQL
+3. Deploy automático — a Vercel usa `vercel.json`:
+   - `dist/` → frontend estático
+   - `/api/*` → função serverless Express (`api/index.js`)
+
+Não use `npm start` na Vercel. O comando de build é `npm run build`.
+
+#### Servidor Node (Render, Railway, VPS)
 
 ```bash
 npm install
 npm start
 ```
 
-Configure `DATABASE_URL` no ambiente. O `npm start` define `NODE_ENV=production`, gera o `dist/` se necessário e sobe a API na porta `PORT` (padrão 3001).
-
-Em plataformas como Render/Railway, use o comando de start: `npm start`.
+Configure `DATABASE_URL` no ambiente. O `npm start` define `NODE_ENV=production`, gera o `dist/` se necessário e sobe API + frontend na mesma porta.
 
 ### Sudoku
 - Modo **Solo** e **Colaborativo** (duelo em turnos no mesmo dispositivo)

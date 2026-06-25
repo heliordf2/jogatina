@@ -116,7 +116,7 @@ export default function App() {
           ? 'API offline — rode npm run dev'
           : error?.message?.includes('DATABASE') || error?.message?.includes('banco')
             ? 'Erro ao conectar ao banco de dados'
-            : 'Servidor indisponível — verifique se npm start está rodando';
+            : 'Servidor indisponível — tente recarregar em instantes';
         showToast(message, 4000);
       });
   }, [showToast]);

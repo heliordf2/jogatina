@@ -10,6 +10,7 @@ export const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes('localhost')
     ? false
     : { rejectUnauthorized: false },
+  max: process.env.VERCEL ? 1 : 10,
 });
 
 const PLAYERS = ['helio', 'thamy'];
