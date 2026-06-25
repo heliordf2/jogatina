@@ -1,21 +1,25 @@
-import IMGS from '../assets/imgs.js';
 import { DIFF_EMPTY } from '../data/constants.js';
-import { isPlayerOnline } from '../utils/presence.js';
+import CurrentPlayerBar from './CurrentPlayerBar.jsx';
 
 export default function HomeScreen({
   mode,
   diff,
-  player,
   scores,
   onlinePlayer,
+  remotePresence,
   onSetMode,
   onSetDiff,
-  onSelectPlayer,
   onStartSolo,
   onStartCollab,
   onShowRanking,
   onBack,
+  onSwitchPlayer,
 }) {
+  const playerDetail =
+    mode === 'solo'
+      ? `${scores[onlinePlayer].total} pts total`
+      : 'com o dispositivo';
+
   return (
     <div className="screen active">
       <div className="header">
@@ -29,6 +33,8 @@ export default function HomeScreen({
           🏆 Ranking
         </button>
       </div>
+
+      <CurrentPlayerBar player={onlinePlayer} detail={playerDetail} remotePresence={remotePresence} />
 
       <div className="tabs">
         <button
@@ -49,29 +55,6 @@ export default function HomeScreen({
 
       {mode === 'solo' ? (
         <div>
-          <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: '.8rem', fontWeight: 500 }}>
-            Quem vai jogar?
-          </p>
-          <div className="player-select">
-            {['helio', 'thamy'].map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={`player-card${player === p ? ' selected' : ''}`}
-                onClick={() => onSelectPlayer(p)}
-              >
-                <div className="avatar">
-                  <img src={IMGS[p]} alt={p === 'helio' ? 'Helio' : 'Thamy'} />
-                  <span className={`online-dot avatar-dot${isPlayerOnline(onlinePlayer, p) ? ' on' : ''}`} />
-                </div>
-                <div className="p-name">{p === 'helio' ? 'Helio' : 'Thamy'}</div>
-                <div className="p-score">{scores[p].total} pts total</div>
-                <div className="p-badge">
-                  {isPlayerOnline(onlinePlayer, p) ? '● Online' : `${scores[p].games} jogo${scores[p].games !== 1 ? 's' : ''}`}
-                </div>
-              </button>
-            ))}
-          </div>
           <div className="diff-label">Dificuldade:</div>
           <div className="diff-select">
             {['easy', 'medium', 'hard', 'extreme'].map((d) => (
@@ -96,24 +79,9 @@ export default function HomeScreen({
         </div>
       ) : (
         <div>
-          <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: '.8rem', fontWeight: 500 }}>
-            Quem vai jogar?
-          </p>
-          <div className="player-select">
-            {['helio', 'thamy'].map((p) => (
-              <div key={p} className="player-card player-card-static">
-                <div className="avatar">
-                  <img src={IMGS[p]} alt={p === 'helio' ? 'Helio' : 'Thamy'} />
-                  <span className={`online-dot avatar-dot${isPlayerOnline(onlinePlayer, p) ? ' on' : ''}`} />
-                </div>
-                <div className="p-name">{p === 'helio' ? 'Helio' : 'Thamy'}</div>
-                <div className="p-score">{scores[p].total} pts total</div>
-                <div className="p-badge">
-                  {isPlayerOnline(onlinePlayer, p) ? '● Online' : `${scores[p].games} jogo${scores[p].games !== 1 ? 's' : ''}`}
-                </div>
-              </div>
-            ))}
-          </div>
+          <button type="button" className="btn" style={{ width: '100%', marginBottom: '.75rem' }} onClick={onSwitchPlayer}>
+            👤 Trocar jogador com o dispositivo
+          </button>
           <div className="info-box">
             <h3>🤝 Duelo em turnos:</h3>
             <p>
@@ -121,7 +89,7 @@ export default function HomeScreen({
               <br />
               ✅ Certo: <strong>+10 pts</strong> &nbsp;❌ Errado: <strong>-5 pts</strong>
               <br />
-              Cada um só joga na <strong>sua vez</strong> — identifique-se ao iniciar!
+              Cada um só joga na <strong>sua vez</strong> — troque o jogador online ao passar o aparelho.
             </p>
           </div>
           <div className="diff-label">Dificuldade:</div>

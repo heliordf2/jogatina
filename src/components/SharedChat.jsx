@@ -4,6 +4,7 @@ export default function SharedChat({
   messages,
   onlinePlayer,
   onSendPlayerMessage,
+  onClear,
   onChatFocusChange,
   title = '💬 Chat',
   quickMessages,
@@ -14,6 +15,7 @@ export default function SharedChat({
       myself={onlinePlayer}
       onSend={onSendPlayerMessage}
       onSendQuick={onSendPlayerMessage}
+      onClear={onClear}
       onFocusChange={onChatFocusChange}
       title={title}
       quickMessages={quickMessages}

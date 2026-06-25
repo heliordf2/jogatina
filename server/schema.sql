@@ -46,4 +46,38 @@ CREATE TABLE IF NOT EXISTS game_sessions (
 CREATE INDEX IF NOT EXISTS idx_game_sessions_started
   ON game_sessions (started_at DESC);
 
+CREATE TABLE IF NOT EXISTS chess_games (
+  id SERIAL PRIMARY KEY,
+  fen TEXT NOT NULL,
+  moves JSONB NOT NULL DEFAULT '[]',
+  white_player TEXT NOT NULL REFERENCES players(id),
+  black_player TEXT NOT NULL REFERENCES players(id),
+  status TEXT NOT NULL DEFAULT 'playing',
+  winner TEXT CHECK (winner IS NULL OR winner IN ('helio', 'thamy', 'draw')),
+  version INTEGER NOT NULL DEFAULT 1,
+  stats_recorded BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by TEXT NOT NULL REFERENCES players(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chess_games_updated
+  ON chess_games (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS player_presence (
+  player_id TEXT PRIMARY KEY REFERENCES players(id),
+  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id SERIAL PRIMARY KEY,
+  sender TEXT NOT NULL CHECK (sender IN ('system', 'player')),
+  player_id TEXT REFERENCES players(id),
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_id
+  ON chat_messages (id DESC);
+
 INSERT INTO players (id) VALUES ('helio'), ('thamy') ON CONFLICT DO NOTHING;

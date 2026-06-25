@@ -1,6 +1,21 @@
-import PlayerPresence from './PlayerPresence.jsx';
+import IMGS from '../assets/imgs.js';
+import { PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
+import { isPlayerOnlineRemote } from '../hooks/useRemotePresence.js';
+import { isPlayerOnline } from '../utils/presence.js';
 
-export default function MainPicker({ onSelectGame, onlinePlayer, onIdentify }) {
+export default function MainPicker({
+  onlinePlayer,
+  remotePresence,
+  onSelectPlayer,
+  onSelectGame,
+}) {
+  const canPlay = Boolean(onlinePlayer);
+
+  function playerIsOnline(player) {
+    if (remotePresence) return isPlayerOnlineRemote(remotePresence, player);
+    return isPlayerOnline(onlinePlayer, player);
+  }
+
   return (
     <div className="screen active">
       <div className="header">
@@ -9,10 +24,44 @@ export default function MainPicker({ onSelectGame, onlinePlayer, onIdentify }) {
         </div>
       </div>
 
-      <p className="picker-subtitle">Escolha um jogo para começar</p>
+      <p className="picker-subtitle">Quem está jogando?</p>
+
+      <div className="picker-player-select">
+        {['helio', 'thamy'].map((p) => {
+          const online = playerIsOnline(p);
+          return (
+            <button
+              key={p}
+              type="button"
+              className={`picker-player-card${onlinePlayer === p ? ' selected' : ''}`}
+              onClick={() => onSelectPlayer(p)}
+            >
+              <div className="picker-player-av">
+                <img src={IMGS[p]} alt={PLAYER_NAMES[p]} />
+                <span className={`online-dot avatar-dot${online ? ' on' : ''}`} />
+              </div>
+              <span className="picker-player-name" style={{ color: PLAYER_COLORS[p] }}>
+                {PLAYER_NAMES[p]}
+              </span>
+              <span className={`picker-player-status${online ? ' on' : ''}`}>
+                {online ? '● Online' : '○ Offline'}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="picker-subtitle" style={{ marginTop: '1.25rem' }}>
+        Escolha um jogo para começar
+      </p>
 
       <div className="game-picker">
-        <button type="button" className="game-card" onClick={() => onSelectGame('sudoku')}>
+        <button
+          type="button"
+          className="game-card"
+          disabled={!canPlay}
+          onClick={() => onSelectGame('sudoku')}
+        >
           <div className="game-card-icon">🔢</div>
           <div className="game-card-title">Sudoku</div>
           <div className="game-card-desc">
@@ -20,20 +69,23 @@ export default function MainPicker({ onSelectGame, onlinePlayer, onIdentify }) {
           </div>
         </button>
 
-        <button type="button" className="game-card" onClick={() => onSelectGame('chess')}>
+        <button
+          type="button"
+          className="game-card"
+          disabled={!canPlay}
+          onClick={() => onSelectGame('chess')}
+        >
           <div className="game-card-icon">♟️</div>
           <div className="game-card-title">Xadrez</div>
           <div className="game-card-desc">
-            Helio vs Thamy no mesmo dispositivo, com chat durante a partida.
+            Helio vs Thamy online, com partida e chat sincronizados.
           </div>
         </button>
       </div>
 
-      <PlayerPresence onlinePlayer={onlinePlayer} />
-
-      <button type="button" className="btn" style={{ width: '100%', marginTop: '.75rem' }} onClick={onIdentify}>
-        👤 Identificar-se
-      </button>
+      {!canPlay && (
+        <p className="picker-hint">Selecione Helio ou Thamy acima para liberar os jogos.</p>
+      )}
     </div>
   );
 }

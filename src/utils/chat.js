@@ -24,3 +24,11 @@ export function saveChat(messages) {
     // ignore storage errors
   }
 }
+
+export function clearChat() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}

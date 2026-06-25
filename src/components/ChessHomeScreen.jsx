@@ -1,8 +1,6 @@
-import IMGS from '../assets/imgs.js';
-import { PLAYER_NAMES } from '../data/constants.js';
-import { isPlayerOnline } from '../utils/presence.js';
+import CurrentPlayerBar from './CurrentPlayerBar.jsx';
 
-export default function ChessHomeScreen({ onBack, onStart, onlinePlayer }) {
+export default function ChessHomeScreen({ onBack, onStart, onlinePlayer, remotePresence, joining = false }) {
   return (
     <div className="screen active">
       <div className="header">
@@ -15,37 +13,21 @@ export default function ChessHomeScreen({ onBack, onStart, onlinePlayer }) {
         <div />
       </div>
 
-      <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: '.8rem', fontWeight: 500 }}>
-        Quem vai jogar?
-      </p>
+      <CurrentPlayerBar player={onlinePlayer} detail="jogando online" remotePresence={remotePresence} />
 
-      <div className="player-select">
-        {['helio', 'thamy'].map((p) => (
-          <div key={p} className="player-card player-card-static">
-            <div className="avatar">
-              <img src={IMGS[p]} alt={PLAYER_NAMES[p]} />
-              <span className={`online-dot avatar-dot${isPlayerOnline(onlinePlayer, p) ? ' on' : ''}`} />
-            </div>
-            <div className="p-name">{PLAYER_NAMES[p]}</div>
-            <div className="p-score">{p === 'helio' ? '♔ Brancas' : '♚ Pretas'}</div>
-            <div className="p-badge">{isPlayerOnline(onlinePlayer, p) ? '● Online' : '○ Offline'}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="info-box">
-        <h3>⚔️ Duelo local:</h3>
+      <div className="info-box" style={{ marginTop: '1rem' }}>
+        <h3>🌐 Duelo online:</h3>
         <p>
-          Helio e Thamy jogam no <strong>mesmo dispositivo</strong>, passando um para o outro.
+          Helio e Thamy jogam em <strong>dispositivos diferentes</strong>, com a partida sincronizada em tempo real.
           <br />
-          Helio joga com as <strong>brancas</strong>, Thamy com as <strong>pretas</strong>.
+          As cores (<strong>brancas</strong> e <strong>pretas</strong>) são sorteadas aleatoriamente a cada partida.
           <br />
-          Identifique-se ao iniciar e troque de jogador quando passar o aparelho!
+          Cada um entra com seu usuário na tela inicial e aguarda a vez do oponente.
         </p>
       </div>
 
-      <button type="button" className="btn btn-primary" onClick={onStart}>
-        ♟️ Iniciar Partida
+      <button type="button" className="btn btn-primary" onClick={onStart} disabled={joining}>
+        {joining ? 'Conectando...' : '♟️ Iniciar / Entrar na Partida'}
       </button>
     </div>
   );

@@ -28,11 +28,19 @@ export function getCapturedPiecesFromMoves(Chess, moves = []) {
 
 export { PIECE_SYMBOLS };
 
-export function getChessWinner(chess) {
+export function rollChessColors() {
+  const whitePlayer = Math.random() < 0.5 ? 'helio' : 'thamy';
+  return {
+    whitePlayer,
+    blackPlayer: whitePlayer === 'helio' ? 'thamy' : 'helio',
+  };
+}
+
+export function getChessWinner(chess, whitePlayer, blackPlayer) {
   if (!chess.isGameOver()) return null;
   if (chess.isDraw()) return 'draw';
   if (chess.isCheckmate()) {
-    return chess.turn() === 'w' ? 'thamy' : 'helio';
+    return chess.turn() === 'w' ? blackPlayer : whitePlayer;
   }
   return null;
 }

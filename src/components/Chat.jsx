@@ -7,6 +7,7 @@ export default function Chat({
   myself,
   onSend,
   onSendQuick,
+  onClear,
   onFocusChange,
   quickMessages = QUICK_MESSAGES,
   title = '💬 Chat do Duelo',
@@ -29,13 +30,20 @@ export default function Chat({
 
   return (
     <div className="chat-wrap">
-      <div className="chat-header">{title}</div>
+      <div className="chat-header">
+        <span>{title}</span>
+        {onClear && (
+          <button type="button" className="chat-clear-btn" onClick={onClear} title="Limpar chat">
+            🗑️ Limpar
+          </button>
+        )}
+      </div>
       <div className="chat-messages" ref={boxRef}>
-        {messages.map((msg, i) => {
+        {messages.map((msg) => {
           if (msg.sender === 'system') {
             return (
               <div
-                key={i}
+                key={msg.id ?? msg.text}
                 style={{ textAlign: 'center', fontSize: 11, color: 'var(--text3)', padding: '2px 0' }}
               >
                 {msg.text}
@@ -48,7 +56,7 @@ export default function Chat({
           const name = PLAYER_NAMES[msg.player];
 
           return (
-            <div key={i} className={`chat-msg ${isMine ? 'mine' : 'theirs'}`}>
+            <div key={msg.id ?? `${msg.player}-${msg.time}-${msg.text}`} className={`chat-msg ${isMine ? 'mine' : 'theirs'}`}>
               <div className="chat-av">
                 <img src={IMGS[msg.player]} alt={name} />
               </div>

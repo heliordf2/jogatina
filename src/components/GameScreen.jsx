@@ -1,6 +1,8 @@
 import IMGS from '../assets/imgs.js';
 import { DIFF_NAMES, PLAYER_NAMES } from '../data/constants.js';
-import { isPlayerOnline } from '../utils/presence.js';
+import { isPlayerOnlineRemote } from '../hooks/useRemotePresence.js';
+import CurrentPlayerBar from './CurrentPlayerBar.jsx';
+import OtherPlayerBar from './OtherPlayerBar.jsx';
 import Numpad from './Numpad.jsx';
 import SudokuGrid, { getDisabledNums } from './SudokuGrid.jsx';
 
@@ -14,8 +16,8 @@ export default function GameScreen({
   game,
   diff,
   player,
-  myself,
   onlinePlayer,
+  remotePresence,
   progress,
   onGoHome,
   onSwitchPlayer,
@@ -29,7 +31,7 @@ export default function GameScreen({
 }) {
   const disabledNums = getDisabledNums(game);
   const turn = game.collabTurn;
-  const isMyTurn = turn === myself;
+  const isMyTurn = turn === onlinePlayer;
   const boardLocked =
     game.isCollab &&
     !isMyTurn &&
@@ -41,6 +43,8 @@ export default function GameScreen({
 
   return (
     <div className="screen active">
+      <CurrentPlayerBar player={onlinePlayer} remotePresence={remotePresence} />
+
       <div className="game-header">
         <button type="button" className="btn" style={{ padding: '6px 12px', fontSize: 13 }} onClick={onGoHome}>
           ← Sair
@@ -67,12 +71,12 @@ export default function GameScreen({
           <div className="turn-left">
             <div className="avatar-sm">
               <img src={IMGS[turn]} alt={PLAYER_NAMES[turn]} />
-              <span className={`online-dot avatar-dot sm${isPlayerOnline(onlinePlayer, turn) ? ' on' : ''}`} />
+              <span className={`online-dot avatar-dot sm${isPlayerOnlineRemote(remotePresence, turn) ? ' on' : ''}`} />
             </div>
             <span>{PLAYER_NAMES[turn]}</span> — sua vez!
           </div>
           <div className="turn-right">
-            {turn === myself ? 'Sua vez — jogue!' : `Vez de ${PLAYER_NAMES[turn]}`}
+            {turn === onlinePlayer ? 'Sua vez — jogue!' : `Vez de ${PLAYER_NAMES[turn]}`}
           </div>
           <button type="button" className="turn-lock-btn unlocked" style={{ marginRight: 4 }} onClick={onSwitchPlayer}>
             👤 Trocar
@@ -95,14 +99,11 @@ export default function GameScreen({
             <div key={p} className={`csb csb-${p === 'helio' ? 'h' : 't'}`}>
               <div className="csb-av">
                 <img src={IMGS[p]} alt={PLAYER_NAMES[p]} />
-                <span className={`online-dot avatar-dot sm${isPlayerOnline(onlinePlayer, p) ? ' on' : ''}`} />
+                <span className={`online-dot avatar-dot sm${isPlayerOnlineRemote(remotePresence, p) ? ' on' : ''}`} />
               </div>
               <div className="csb-info">
                 <div className="csb-name" style={{ color: p === 'helio' ? '#534AB7' : '#993556' }}>
                   {PLAYER_NAMES[p]}
-                  <span className={`presence-inline${isPlayerOnline(onlinePlayer, p) ? ' online' : ''}`}>
-                    {isPlayerOnline(onlinePlayer, p) ? ' ● Online' : ' ○ Offline'}
-                  </span>
                 </div>
                 <div className="csb-pts" style={{ color: p === 'helio' ? '#534AB7' : '#993556' }}>
                   {game.collabScores[p]}
@@ -170,6 +171,8 @@ export default function GameScreen({
           🔄 Novo
         </button>
       </div>
+
+      <OtherPlayerBar onlinePlayer={onlinePlayer} remotePresence={remotePresence} />
     </div>
   );
 }

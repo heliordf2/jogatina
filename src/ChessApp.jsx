@@ -1,118 +1,92 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import ChessGameScreen from './components/ChessGameScreen.jsx';
 import ChessHomeScreen from './components/ChessHomeScreen.jsx';
-import PlayerPresence from './components/PlayerPresence.jsx';
 import SharedChat from './components/SharedChat.jsx';
-import WhoAmI from './components/WhoAmI.jsx';
 import { PLAYER_NAMES } from './data/constants.js';
+import { createOrJoinChessGame } from './utils/api.js';
 import { recordGameStart } from './utils/gameSessions.js';
 
 export default function ChessApp({
   onBack,
   onlinePlayer,
-  onSetOnline,
   showToast,
   chatMessages,
   addChatMsg,
   sendPlayerChat,
+  clearChatMessages,
+  remotePresence,
   onChatFocusChange,
 }) {
   const [screen, setScreen] = useState('home');
-  const [myself, setMyself] = useState(null);
-  const [whoAmIVisible, setWhoAmIVisible] = useState(false);
-  const [whoAmISubtitle, setWhoAmISubtitle] = useState(null);
-  const whoAmIDoneRef = useRef(null);
+  const [activeGame, setActiveGame] = useState(null);
+  const [joining, setJoining] = useState(false);
 
-  const openWhoAmI = useCallback((onDone, subtitle) => {
-    whoAmIDoneRef.current = onDone;
-    setWhoAmISubtitle(subtitle);
-    setWhoAmIVisible(true);
-  }, []);
+  const startGame = useCallback(async () => {
+    if (!onlinePlayer) {
+      showToast('Selecione quem você é na tela inicial');
+      return;
+    }
 
-  const handoffToPlayer = useCallback(
-    (player) => {
-      setMyself(player);
-      onSetOnline(player);
-    },
-    [onSetOnline],
-  );
+    setJoining(true);
+    try {
+      const game = await createOrJoinChessGame({ player: onlinePlayer });
+      setActiveGame(game);
+      recordGameStart(onlinePlayer, 'chess');
 
-  const startGame = useCallback(() => {
-    openWhoAmI((selected) => {
-      handoffToPlayer(selected);
-      recordGameStart(selected, 'chess');
-      addChatMsg(
-        'system',
-        null,
-        `♟️ Partida iniciada! ${PLAYER_NAMES[selected]} está com o dispositivo.`,
-      );
+      if (game.moves.length === 0) {
+        addChatMsg(
+          'system',
+          null,
+          `♟️ Partida online! ${PLAYER_NAMES[game.whitePlayer]} com as brancas, ${PLAYER_NAMES[game.blackPlayer]} com as pretas.`,
+        );
+      } else {
+        addChatMsg('system', null, `♟️ ${PLAYER_NAMES[onlinePlayer]} entrou na partida online.`);
+      }
+
       setScreen('game');
-    }, 'Identifique-se para jogar xadrez');
-  }, [addChatMsg, handoffToPlayer, openWhoAmI]);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setJoining(false);
+    }
+  }, [addChatMsg, onlinePlayer, showToast]);
 
   const goHome = useCallback(() => {
     setScreen('home');
-    setMyself(null);
-    onSetOnline(null);
-  }, [onSetOnline]);
-
-  const switchPlayer = useCallback(() => {
-    openWhoAmI((selected) => {
-      handoffToPlayer(selected);
-      addChatMsg('system', null, `👤 ${PLAYER_NAMES[selected]} ficou online.`);
-    }, 'Quem está com o dispositivo agora?');
-  }, [addChatMsg, handoffToPlayer, openWhoAmI]);
-
-  const handleTurnHandoff = useCallback(
-    (player) => {
-      handoffToPlayer(player);
-    },
-    [handoffToPlayer],
-  );
+    setActiveGame(null);
+  }, []);
 
   return (
     <div className="app chess-app">
-      <WhoAmI
-        visible={whoAmIVisible}
-        subtitle={whoAmISubtitle}
-        onSelect={(p) => {
-          setWhoAmIVisible(false);
-          setWhoAmISubtitle(null);
-          whoAmIDoneRef.current?.(p);
-          whoAmIDoneRef.current = null;
-        }}
-      />
-
       {screen === 'home' && (
         <ChessHomeScreen
           onBack={onBack}
           onStart={startGame}
           onlinePlayer={onlinePlayer}
+          remotePresence={remotePresence}
+          joining={joining}
         />
       )}
 
       {screen === 'game' && (
         <ChessGameScreen
-          myself={myself}
           onlinePlayer={onlinePlayer}
+          remotePresence={remotePresence}
+          initialGame={activeGame}
           onGoHome={goHome}
-          onSwitchPlayer={switchPlayer}
-          onTurnHandoff={handleTurnHandoff}
           onSystemMessage={(text) => addChatMsg('system', null, text)}
           showToast={showToast}
         />
       )}
 
       {(screen === 'home' || screen === 'game') && (
-        <>
-          <PlayerPresence onlinePlayer={onlinePlayer} compact={screen === 'game'} />
-          <SharedChat
-            messages={chatMessages}
-            onlinePlayer={onlinePlayer}
-            onSendPlayerMessage={sendPlayerChat}
-            onChatFocusChange={onChatFocusChange}
-          />
-        </>
+        <SharedChat
+          messages={chatMessages}
+          onlinePlayer={onlinePlayer}
+          onSendPlayerMessage={sendPlayerChat}
+          onClear={clearChatMessages}
+          onChatFocusChange={onChatFocusChange}
+        />
       )}
     </div>
   );

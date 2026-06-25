@@ -2,10 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import './App.css';
 import GameScreen from './components/GameScreen.jsx';
 import HomeScreen from './components/HomeScreen.jsx';
-import PlayerPresence from './components/PlayerPresence.jsx';
 import RankingScreen from './components/RankingScreen.jsx';
 import SharedChat from './components/SharedChat.jsx';
-import WhoAmI from './components/WhoAmI.jsx';
 import WinScreen from './components/WinScreen.jsx';
 import {
   createEmptyDrafts,
@@ -53,17 +51,16 @@ export default function SudokuApp({
   chatMessages,
   addChatMsg,
   sendPlayerChat,
+  clearChatMessages,
+  remotePresence,
   onChatFocusChange,
 }) {
   const [screen, setScreen] = useState('home');
   const [mode, setMode] = useState('solo');
   const [diff, setDiff] = useState('easy');
-  const [player, setPlayer] = useState(null);
-  const [myself, setMyself] = useState(null);
   const [scores, setScores] = useState(() => structuredClone(INITIAL_SCORES));
   const [game, setGame] = useState(createInitialGameState);
   const [winResult, setWinResult] = useState(null);
-  const [whoAmI, setWhoAmI] = useState({ visible: false, onDone: null });
 
   const timerRef = useRef(null);
 
@@ -86,7 +83,7 @@ export default function SudokuApp({
   }, [stopTimer]);
 
   const doStart = useCallback(
-    (collab, currentMyself) => {
+    (collab, currentPlayer) => {
       stopTimer();
       const { solution, puzzle } = generateSudoku(diff);
       setGame({
@@ -110,58 +107,48 @@ export default function SudokuApp({
       setScreen('game');
       startTimer();
 
-      const sessionPlayer = collab ? currentMyself : player;
+      const sessionPlayer = collab ? currentPlayer : onlinePlayer;
       recordGameStart(sessionPlayer, 'sudoku', collab ? 'collab' : 'solo');
 
-      if (collab && currentMyself) {
+      if (collab && currentPlayer) {
         addChatMsg(
           'system',
           null,
-          `🎮 Duelo iniciado! ${PLAYER_NAMES[currentMyself]} começa jogando.`,
+          `🎮 Duelo iniciado! ${PLAYER_NAMES[currentPlayer]} começa jogando.`,
         );
       }
     },
-    [addChatMsg, diff, player, startTimer, stopTimer],
+    [addChatMsg, diff, onlinePlayer, startTimer, stopTimer],
   );
 
   const startSolo = useCallback(() => {
-    if (!player) {
-      showToast('⚠️ Escolha um jogador primeiro!');
+    if (!onlinePlayer) {
+      showToast('Selecione quem você é na tela inicial');
       return;
     }
-    onSetOnline(player);
     doStart(false, null);
-  }, [doStart, onSetOnline, player, showToast]);
+  }, [doStart, onlinePlayer, showToast]);
 
   const startCollab = useCallback(() => {
-    setWhoAmI({
-      visible: true,
-      onDone: (selected) => {
-        setMyself(selected);
-        onSetOnline(selected);
-        doStart(true, selected);
-      },
-    });
-  }, [doStart, onSetOnline]);
+    if (!onlinePlayer) {
+      showToast('Selecione quem você é na tela inicial');
+      return;
+    }
+    doStart(true, onlinePlayer);
+  }, [doStart, onlinePlayer, showToast]);
 
   const switchPlayer = useCallback(() => {
-    setWhoAmI({
-      visible: true,
-      onDone: (selected) => {
-        setMyself(selected);
-        onSetOnline(selected);
-        addChatMsg('system', null, `👤 ${PLAYER_NAMES[selected]} ficou online.`);
-      },
-    });
-  }, [addChatMsg, onSetOnline]);
+    if (!onlinePlayer) return;
+    const next = onlinePlayer === 'helio' ? 'thamy' : 'helio';
+    onSetOnline(next);
+    addChatMsg('system', null, `👤 ${PLAYER_NAMES[next]} ficou online.`);
+  }, [addChatMsg, onlinePlayer, onSetOnline]);
 
   const goHome = useCallback(() => {
     stopTimer();
     setScreen('home');
     setWinResult(null);
-    setMyself(null);
-    onSetOnline(null);
-  }, [onSetOnline, stopTimer]);
+  }, [stopTimer]);
 
   const checkWin = useCallback(
     (currentGame) => {
@@ -222,7 +209,7 @@ export default function SudokuApp({
 
         setScores((prev) => {
           const next = structuredClone(prev);
-          const p = next[player];
+          const p = next[onlinePlayer];
           p.total += pts;
           p.games++;
           if (!p.best || pts > p.best) p.best = pts;
@@ -241,7 +228,7 @@ export default function SudokuApp({
 
         setWinResult({
           emoji: currentGame.errors === 0 ? '🎯' : '🎉',
-          title: `${PLAYER_NAMES[player]} concluiu!`,
+          title: `${PLAYER_NAMES[onlinePlayer]} concluiu!`,
           sub:
             `Sudoku ${diffLabel}` +
             (currentGame.errors === 0 ? ' sem erros! Perfeito! 🌟' : ' resolvido!'),
@@ -254,7 +241,7 @@ export default function SudokuApp({
       setTimeout(() => setScreen('win'), 700);
       return true;
     },
-    [diff, player, stopTimer],
+    [diff, onlinePlayer, stopTimer],
   );
 
   const selectCell = useCallback(
@@ -262,7 +249,7 @@ export default function SudokuApp({
       setGame((g) => {
         if (g.paused) return g;
         if (g.given[r][c] || isCellLocked(g, r, c)) return g;
-        if (g.isCollab && g.collabTurn !== myself) {
+        if (g.isCollab && g.collabTurn !== onlinePlayer) {
           if (g.turnLocked) {
             showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
             return g;
@@ -273,7 +260,7 @@ export default function SudokuApp({
         return { ...g, selected: [r, c] };
       });
     },
-    [myself, showToast],
+    [onlinePlayer, showToast],
   );
 
   const enterNum = useCallback(
@@ -286,7 +273,7 @@ export default function SudokuApp({
         }
         const [r, c] = g.selected;
         if (g.given[r][c] || isCellLocked(g, r, c)) return g;
-        if (g.isCollab && g.collabTurn !== myself) {
+        if (g.isCollab && g.collabTurn !== onlinePlayer) {
           showToast('🔒 Não é sua vez!');
           return g;
         }
@@ -349,7 +336,10 @@ export default function SudokuApp({
           next.turnLocked = false;
           next.selected = null;
           next.drafts = drafts;
-          setTimeout(() => checkWin(next), 0);
+          setTimeout(() => {
+            onSetOnline(next.collabTurn);
+            checkWin(next);
+          }, 0);
           return next;
         }
 
@@ -376,7 +366,7 @@ export default function SudokuApp({
         return next;
       });
     },
-    [addChatMsg, checkWin, myself, showToast],
+    [addChatMsg, checkWin, onlinePlayer, onSetOnline, showToast],
   );
 
   const toggleDraft = useCallback(() => {
@@ -397,18 +387,18 @@ export default function SudokuApp({
 
   const toggleTurnLock = useCallback(() => {
     setGame((g) => {
-      if (g.collabTurn !== myself) {
+      if (g.collabTurn !== onlinePlayer) {
         showToast('Só quem está jogando pode travar!');
         return g;
       }
       const locked = !g.turnLocked;
       const msg = locked
-        ? `🔒 ${PLAYER_NAMES[myself]} travou a vez`
-        : `🔓 ${PLAYER_NAMES[myself]} destravou a vez`;
+        ? `🔒 ${PLAYER_NAMES[onlinePlayer]} travou a vez`
+        : `🔓 ${PLAYER_NAMES[onlinePlayer]} destravou a vez`;
       addChatMsg('system', null, msg);
       return { ...g, turnLocked: locked };
     });
-  }, [addChatMsg, myself, showToast]);
+  }, [addChatMsg, onlinePlayer, showToast]);
 
   const useHint = useCallback(() => {
     setGame((g) => {
@@ -417,7 +407,7 @@ export default function SudokuApp({
         showToast('Sem dicas restantes!');
         return g;
       }
-      if (g.isCollab && g.collabTurn !== myself) {
+      if (g.isCollab && g.collabTurn !== onlinePlayer) {
         showToast('🔒 Não é sua vez!');
         return g;
       }
@@ -447,18 +437,19 @@ export default function SudokuApp({
       if (next.isCollab) {
         next.collabCells = {
           ...next.collabCells,
-          [myself]: [...next.collabCells[myself], [r, c]],
+          [onlinePlayer]: [...next.collabCells[onlinePlayer], [r, c]],
         };
-        next.collabTurn = myself === 'helio' ? 'thamy' : 'helio';
+        next.collabTurn = onlinePlayer === 'helio' ? 'thamy' : 'helio';
         next.turnLocked = false;
-        addChatMsg('system', null, `💡 ${PLAYER_NAMES[myself]} usou uma dica!`);
+        onSetOnline(next.collabTurn);
+        addChatMsg('system', null, `💡 ${PLAYER_NAMES[onlinePlayer]} usou uma dica!`);
       }
 
       showToast('💡 Dica usada!', 1500);
       setTimeout(() => checkWin(next), 0);
       return next;
     });
-  }, [addChatMsg, checkWin, myself, showToast]);
+  }, [addChatMsg, checkWin, onlinePlayer, onSetOnline, showToast]);
 
   const newGame = useCallback(() => {
     stopTimer();
@@ -473,11 +464,11 @@ export default function SudokuApp({
         const r = (g.selected[0] + dr + 9) % 9;
         const c = (g.selected[1] + dc + 9) % 9;
         if (g.given[r][c]) return g;
-        if (g.isCollab && g.collabTurn !== myself) return g;
+        if (g.isCollab && g.collabTurn !== onlinePlayer) return g;
         return { ...g, selected: [r, c] };
       });
     },
-    [myself],
+    [onlinePlayer],
   );
 
   useEffect(() => {
@@ -507,28 +498,20 @@ export default function SudokuApp({
 
   return (
     <div className="app">
-      <WhoAmI
-        visible={whoAmI.visible}
-        onSelect={(p) => {
-          setWhoAmI({ visible: false, onDone: null });
-          whoAmI.onDone?.(p);
-        }}
-      />
-
       {screen === 'home' && (
         <HomeScreen
           mode={mode}
           diff={diff}
-          player={player}
           scores={scores}
           onSetMode={setMode}
           onSetDiff={setDiff}
-          onSelectPlayer={setPlayer}
           onStartSolo={startSolo}
           onStartCollab={startCollab}
           onShowRanking={() => setScreen('ranking')}
           onBack={onBack}
           onlinePlayer={onlinePlayer}
+          remotePresence={remotePresence}
+          onSwitchPlayer={switchPlayer}
         />
       )}
 
@@ -536,9 +519,9 @@ export default function SudokuApp({
         <GameScreen
           game={game}
           diff={diff}
-          player={player}
-          myself={myself}
+          player={onlinePlayer}
           onlinePlayer={onlinePlayer}
+          remotePresence={remotePresence}
           progress={progress}
           onGoHome={goHome}
           onSwitchPlayer={switchPlayer}
@@ -563,15 +546,13 @@ export default function SudokuApp({
       {screen === 'ranking' && <RankingScreen scores={scores} onGoHome={goHome} />}
 
       {(screen === 'home' || screen === 'game') && (
-        <>
-          <PlayerPresence onlinePlayer={onlinePlayer} compact={screen === 'game'} />
-          <SharedChat
+        <SharedChat
             messages={chatMessages}
             onlinePlayer={onlinePlayer}
             onSendPlayerMessage={sendPlayerChat}
+            onClear={clearChatMessages}
             onChatFocusChange={onChatFocusChange}
           />
-        </>
       )}
     </div>
   );

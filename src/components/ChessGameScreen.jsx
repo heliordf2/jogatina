@@ -1,22 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
 import IMGS from '../assets/imgs.js';
 import { PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
-import { isPlayerOnline } from '../utils/presence.js';
+import CurrentPlayerBar from './CurrentPlayerBar.jsx';
+import OtherPlayerBar from './OtherPlayerBar.jsx';
+import {
+  createOrJoinChessGame,
+  fetchActiveChessGame,
+  postChessMove,
+  postChessResign,
+} from '../utils/api.js';
+import { isPlayerOnlineRemote } from '../hooks/useRemotePresence.js';
 import {
   getCapturedPiecesFromMoves,
-  getChessStatus,
-  getChessWinner,
   PIECE_SYMBOLS,
 } from '../utils/chessHelpers.js';
-import { recordChessResult } from '../utils/gameStats.js';
-import { recordGameStart } from '../utils/gameSessions.js';
 import { playCaptureSound, playCheckSound, playMoveSound, unlockAudio } from '../utils/chessSounds.js';
 
 const MOVE_HIGHLIGHT = 'radial-gradient(circle, rgba(16, 185, 129, 0.55) 22%, transparent 22%)';
 const CAPTURE_HIGHLIGHT = 'radial-gradient(circle, rgba(16, 185, 129, 0.5) 82%, transparent 82%)';
 const SELECTED_HIGHLIGHT = 'rgba(16, 185, 129, 0.45)';
+const POLL_MS = 1500;
 
 function CapturedPanel({ label, pieces, color }) {
   return (
@@ -38,65 +43,121 @@ function CapturedPanel({ label, pieces, color }) {
   );
 }
 
-function createInitialState() {
-  const chess = new Chess();
+function mapServerGame(game) {
+  const chess = new Chess(game.fen);
   return {
-    fen: chess.fen(),
+    id: game.id,
+    fen: game.fen,
     turn: chess.turn(),
-    moves: [],
-    status: 'playing',
-    winner: null,
+    moves: game.moves ?? [],
+    status: game.status,
+    winner: game.winner,
+    whitePlayer: game.whitePlayer,
+    blackPlayer: game.blackPlayer,
+    version: game.version,
   };
 }
 
+function isPlayingStatus(status) {
+  return !['checkmate', 'draw', 'resigned'].includes(status);
+}
+
 export default function ChessGameScreen({
-  myself,
   onlinePlayer,
+  remotePresence,
+  initialGame,
   onGoHome,
-  onSwitchPlayer,
-  onTurnHandoff,
   onSystemMessage,
   showToast,
 }) {
+  const myself = onlinePlayer;
   const chessRef = useRef(new Chess());
-  const [gameState, setGameState] = useState(createInitialState);
-  const [selectedSquare, setSelectedSquare] = useState(null);
+  const lastVersionRef = useRef(0);
   const prevMovesCount = useRef(0);
-  const recordedResultRef = useRef(false);
+  const announcedEndRef = useRef(false);
 
-  const activePlayer = gameState.turn === 'w' ? 'helio' : 'thamy';
-  const isMyTurn = myself === activePlayer;
-  const isPlaying = !['checkmate', 'draw'].includes(gameState.status);
-  const myPieceColor = myself === 'helio' ? 'w' : 'b';
-  const boardOrientation = myself === 'helio' ? 'white' : 'black';
+  const [gameState, setGameState] = useState(() =>
+    initialGame ? mapServerGame(initialGame) : null,
+  );
+  const [loading, setLoading] = useState(!initialGame);
+  const [selectedSquare, setSelectedSquare] = useState(null);
+  const [moving, setMoving] = useState(false);
 
-  const { whiteLost, blackLost } = useMemo(
-    () => getCapturedPiecesFromMoves(Chess, gameState.moves),
-    [gameState.moves],
+  const applyServerGame = useCallback((game) => {
+    if (!game) return;
+    const mapped = mapServerGame(game);
+    chessRef.current = new Chess(mapped.fen);
+    lastVersionRef.current = mapped.version;
+    setGameState(mapped);
+  }, []);
+
+  const announceTerminalState = useCallback(
+    (mapped) => {
+      if (announcedEndRef.current || isPlayingStatus(mapped.status)) return;
+      announcedEndRef.current = true;
+
+      if (mapped.status === 'draw' || mapped.winner === 'draw') {
+        onSystemMessage?.('🤝 Partida empatada!');
+        return;
+      }
+
+      if (mapped.winner) {
+        if (mapped.status === 'resigned') {
+          onSystemMessage?.(`🏳️ ${PLAYER_NAMES[mapped.winner]} venceu por desistência!`);
+        } else {
+          onSystemMessage?.(`🏆 ${PLAYER_NAMES[mapped.winner]} venceu a partida!`);
+        }
+      }
+    },
+    [onSystemMessage],
   );
 
   useEffect(() => {
-    setSelectedSquare(null);
-  }, [gameState.fen]);
+    if (initialGame) {
+      applyServerGame(initialGame);
+      chessRef.current = new Chess(initialGame.fen);
+      lastVersionRef.current = initialGame.version;
+      setLoading(false);
+    }
+  }, [applyServerGame, initialGame]);
 
   useEffect(() => {
     unlockAudio();
   }, []);
 
   useEffect(() => {
-    onTurnHandoff?.('helio');
-  }, [onTurnHandoff]);
+    let cancelled = false;
+
+    async function sync() {
+      try {
+        const game = await fetchActiveChessGame();
+        if (cancelled || !game) return;
+        if (game.version !== lastVersionRef.current) {
+          const mapped = mapServerGame(game);
+          applyServerGame(game);
+          announceTerminalState(mapped);
+        }
+      } catch {
+        // ignore transient sync errors
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    sync();
+    const id = setInterval(sync, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [announceTerminalState, applyServerGame]);
 
   useEffect(() => {
-    if (!gameState.winner || recordedResultRef.current) return;
-    if (!['checkmate', 'draw'].includes(gameState.status)) return;
-
-    recordedResultRef.current = true;
-    recordChessResult(gameState.winner).catch(() => {});
-  }, [gameState.winner, gameState.status]);
+    setSelectedSquare(null);
+  }, [gameState?.fen]);
 
   useEffect(() => {
-    const moves = gameState.moves || [];
+    const moves = gameState?.moves || [];
     if (moves.length <= prevMovesCount.current) {
       prevMovesCount.current = moves.length;
       return;
@@ -117,13 +178,25 @@ export default function ChessGameScreen({
     }
 
     prevMovesCount.current = moves.length;
-  }, [gameState.moves]);
+  }, [gameState?.moves]);
+
+  const activePlayer =
+    gameState?.turn === 'w' ? gameState.whitePlayer : gameState.blackPlayer;
+  const isMyTurn = myself === activePlayer;
+  const isPlaying = gameState ? isPlayingStatus(gameState.status) : false;
+  const myPieceColor = myself === gameState?.whitePlayer ? 'w' : 'b';
+  const boardOrientation = myself === gameState?.whitePlayer ? 'white' : 'black';
+
+  const { whiteLost, blackLost } = useMemo(
+    () => getCapturedPiecesFromMoves(Chess, gameState?.moves ?? []),
+    [gameState?.moves],
+  );
 
   const legalMoves = useMemo(() => {
-    if (!selectedSquare || !isMyTurn || !isPlaying) return [];
+    if (!selectedSquare || !isMyTurn || !isPlaying || !gameState) return [];
     const chess = new Chess(gameState.fen);
     return chess.moves({ square: selectedSquare, verbose: true });
-  }, [selectedSquare, gameState.fen, isMyTurn, isPlaying]);
+  }, [selectedSquare, gameState, isMyTurn, isPlaying]);
 
   const squareStyles = useMemo(() => {
     const styles = {};
@@ -138,55 +211,36 @@ export default function ChessGameScreen({
   }, [selectedSquare, legalMoves]);
 
   function isOwnPiece(square) {
+    if (!gameState) return false;
     const chess = new Chess(gameState.fen);
     const piece = chess.get(square);
     return piece?.color === myPieceColor;
   }
 
-  function applyMove(from, to) {
-    if (!isMyTurn || !isPlaying) {
-      if (!isMyTurn) {
+  async function applyMove(from, to) {
+    if (!isMyTurn || !isPlaying || moving || !myself) {
+      if (!isMyTurn && isPlaying) {
         showToast(`É a vez de ${PLAYER_NAMES[activePlayer]}!`);
       }
       return false;
     }
 
+    setMoving(true);
     try {
-      const move = chessRef.current.move({ from, to, promotion: 'q' });
-      if (!move) return false;
-
-      const chess = chessRef.current;
-      const winner = getChessWinner(chess);
-      const status = getChessStatus(chess);
-
-      setGameState({
-        fen: chess.fen(),
-        turn: chess.turn(),
-        moves: chess.history(),
-        status,
-        winner,
-      });
-
-      if (!winner && status !== 'draw' && status !== 'checkmate') {
-        const nextPlayer = chess.turn() === 'w' ? 'helio' : 'thamy';
-        onTurnHandoff?.(nextPlayer);
-      }
-
-      if (winner && winner !== 'draw') {
-        onSystemMessage(`🏆 ${PLAYER_NAMES[winner]} venceu a partida!`);
-      } else if (winner === 'draw') {
-        onSystemMessage('🤝 Partida empatada!');
-      }
-
+      const game = await postChessMove({ player: myself, from, to, promotion: 'q' });
+      applyServerGame(game);
       return true;
-    } catch {
+    } catch (error) {
+      showToast(error.message);
       return false;
+    } finally {
+      setMoving(false);
     }
   }
 
-  function tryMove(from, to) {
+  async function tryMove(from, to) {
     if (!to) return false;
-    const moved = applyMove(from, to);
+    const moved = await applyMove(from, to);
     if (moved) setSelectedSquare(null);
     return moved;
   }
@@ -226,39 +280,48 @@ export default function ChessGameScreen({
     setSelectedSquare(square);
   }
 
-  function handleDrop({ sourceSquare, targetSquare }) {
+  async function handleDrop({ sourceSquare, targetSquare }) {
     if (!targetSquare || !isMyTurn || !isPlaying) {
       setSelectedSquare(null);
       return false;
     }
-    const moved = tryMove(sourceSquare, targetSquare);
+    const moved = await tryMove(sourceSquare, targetSquare);
     if (!moved) setSelectedSquare(sourceSquare);
     return moved;
   }
 
-  function handleResign() {
+  async function handleResign() {
     if (!isPlaying || !myself) return;
-    const winner = myself === 'helio' ? 'thamy' : 'helio';
-    setGameState((s) => ({ ...s, status: 'checkmate', winner }));
-    onSystemMessage(`🏳️ ${PLAYER_NAMES[myself]} desistiu. ${PLAYER_NAMES[winner]} vence!`);
+    try {
+      const game = await postChessResign({ player: myself });
+      applyServerGame(game);
+      announceTerminalState(mapServerGame(game));
+    } catch (error) {
+      showToast(error.message);
+    }
   }
 
-  function handleNewGame() {
-    chessRef.current = new Chess();
-    setGameState(createInitialState());
-    setSelectedSquare(null);
-    prevMovesCount.current = 0;
-    recordedResultRef.current = false;
-    if (myself) recordGameStart(myself, 'chess');
-    onTurnHandoff?.('helio');
-    onSystemMessage('♟️ Nova partida iniciada!');
+  async function handleNewGame() {
+    if (!myself) return;
+    try {
+      const game = await createOrJoinChessGame({ player: myself, forceNew: true });
+      announcedEndRef.current = false;
+      prevMovesCount.current = 0;
+      applyServerGame(game);
+      onSystemMessage?.(
+        `🎲 Nova partida online! ${PLAYER_NAMES[game.whitePlayer]} com as brancas, ${PLAYER_NAMES[game.blackPlayer]} com as pretas.`,
+      );
+    } catch (error) {
+      showToast(error.message);
+    }
   }
 
   const gameResult = useMemo(() => {
-    if (gameState.status === 'draw') {
+    if (!gameState || isPlayingStatus(gameState.status)) return null;
+    if (gameState.status === 'draw' || gameState.winner === 'draw') {
       return { type: 'draw', title: 'Empate!', subtitle: 'A partida terminou empatada.' };
     }
-    if (gameState.status === 'checkmate' && gameState.winner) {
+    if (gameState.winner) {
       const won = gameState.winner === myself;
       return won
         ? { type: 'win', title: 'Vitória!', subtitle: 'Parabéns, você venceu a partida.' }
@@ -271,23 +334,35 @@ export default function ChessGameScreen({
     return null;
   }, [gameState, myself]);
 
+  if (loading || !gameState) {
+    return (
+      <div className="screen active chess-screen">
+        <p style={{ textAlign: 'center', color: 'var(--text2)', padding: '2rem 0' }}>
+          Sincronizando partida...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="screen active chess-screen">
+      <CurrentPlayerBar player={onlinePlayer} detail="jogando online" remotePresence={remotePresence} />
+
       <div className="game-header">
         <button type="button" className="btn" style={{ padding: '6px 12px', fontSize: 13 }} onClick={onGoHome}>
           ← Sair
         </button>
         <div className="game-title">♟️ Helio vs Thamy</div>
-        <button type="button" className="btn" style={{ padding: '6px 12px', fontSize: 13 }} onClick={onSwitchPlayer}>
-          👤 Trocar
-        </button>
+        <div style={{ width: 64 }} />
       </div>
 
       <div className={`turn-banner turn-${activePlayer}`}>
         <div className="turn-left">
           <div className="avatar-sm">
             <img src={IMGS[activePlayer]} alt={PLAYER_NAMES[activePlayer]} />
-            <span className={`online-dot avatar-dot sm${isPlayerOnline(onlinePlayer, activePlayer) ? ' on' : ''}`} />
+            <span
+              className={`online-dot avatar-dot sm${isPlayerOnlineRemote(remotePresence, activePlayer) ? ' on' : ''}`}
+            />
           </div>
           <span style={{ color: PLAYER_COLORS[activePlayer] }}>{PLAYER_NAMES[activePlayer]}</span>
           {isPlaying &&
@@ -299,9 +374,9 @@ export default function ChessGameScreen({
         </div>
         <div className="turn-right">
           {myself === activePlayer
-            ? 'Sua vez — jogue!'
+            ? `Sua vez — ${myself === gameState.whitePlayer ? '♔ brancas' : '♚ pretas'}`
             : myself
-              ? `Passe para ${PLAYER_NAMES[activePlayer]}`
+              ? `Aguardando ${PLAYER_NAMES[activePlayer]}`
               : 'Identifique-se'}
         </div>
       </div>
@@ -322,15 +397,20 @@ export default function ChessGameScreen({
       )}
 
       <div className="board-layout">
-        <CapturedPanel label={PLAYER_NAMES.thamy} pieces={blackLost} color="black" />
+        <CapturedPanel
+          label={PLAYER_NAMES[gameState.blackPlayer]}
+          pieces={blackLost}
+          color="black"
+        />
         <div className="board-container">
           <Chessboard
-            key={`${gameState.fen}-${myself ?? 'guest'}`}
+            key={`${gameState.fen}-${myself ?? 'guest'}-${gameState.whitePlayer}-${gameState.version}`}
             options={{
               position: gameState.fen,
               boardOrientation,
-              allowDragging: isMyTurn && isPlaying,
-              canDragPiece: ({ square }) => isMyTurn && isPlaying && isOwnPiece(square),
+              allowDragging: isMyTurn && isPlaying && !moving,
+              canDragPiece: ({ square }) =>
+                isMyTurn && isPlaying && !moving && isOwnPiece(square),
               onPieceClick: handlePieceClick,
               onSquareClick: handleSquareClick,
               onPieceDrag: handlePieceDrag,
@@ -345,7 +425,11 @@ export default function ChessGameScreen({
             }}
           />
         </div>
-        <CapturedPanel label={PLAYER_NAMES.helio} pieces={whiteLost} color="white" />
+        <CapturedPanel
+          label={PLAYER_NAMES[gameState.whitePlayer]}
+          pieces={whiteLost}
+          color="white"
+        />
       </div>
 
       {gameState.status === 'check' && isPlaying && (
@@ -354,14 +438,16 @@ export default function ChessGameScreen({
 
       <div className="actions">
         {isPlaying && (
-          <button type="button" className="btn btn-danger" onClick={handleResign}>
+          <button type="button" className="btn btn-danger" onClick={handleResign} disabled={moving}>
             🏳️ Desistir
           </button>
         )}
-        <button type="button" className="btn" onClick={handleNewGame}>
+        <button type="button" className="btn" onClick={handleNewGame} disabled={moving}>
           🔄 Novo
         </button>
       </div>
+
+      <OtherPlayerBar onlinePlayer={onlinePlayer} remotePresence={remotePresence} />
     </div>
   );
 }
