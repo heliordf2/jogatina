@@ -14,32 +14,54 @@ function resolveApiBase() {
 
 const API_BASE = resolveApiBase();
 
+function sanitizeClientError(message, fallback) {
+  if (!message) return fallback;
+  if (/127\.0\.0\.1|localhost|ECONNREFUSED|ENOTFOUND|fetch failed/i.test(message)) {
+    return 'Não foi possível conectar ao servidor';
+  }
+  if (/postgres:\/\//i.test(message) || /password/i.test(message)) {
+    return 'Erro de conexão com o banco de dados';
+  }
+  return message;
+}
+
 function devOnlyHint(devText, prodText) {
   return import.meta.env.DEV ? devText : prodText;
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  });
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+  } catch (error) {
+    throw new Error(
+      sanitizeClientError(
+        error.message,
+        devOnlyHint('API offline — rode npm run dev', 'Não foi possível conectar ao servidor'),
+      ),
+    );
+  }
 
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     if (response.status === 404) {
-      throw new Error(
-        body.error ||
-          devOnlyHint(
-            'Rota não encontrada — reinicie com npm run dev',
-            'Recurso não encontrado no servidor',
-          ),
+      const fallback = devOnlyHint(
+        'Rota não encontrada — reinicie com npm run dev',
+        'Recurso não encontrado no servidor',
       );
+      throw new Error(sanitizeClientError(body.error, fallback));
     }
-    throw new Error(body.error || `Erro na API (${response.status})`);
+    throw new Error(
+      sanitizeClientError(body.error, `Erro na API (${response.status})`),
+    );
   }
 
   if (response.status === 204) return null;
@@ -56,7 +78,7 @@ export async function checkApiHealth({ retries = 1, delayMs = 0 } = {}) {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(body.error || `Erro na API (${response.status})`);
+        throw new Error(sanitizeClientError(body.error, `Erro na API (${response.status})`));
       }
       return body;
     } catch (error) {
@@ -104,11 +126,13 @@ export function fetchActiveChessGame() {
     headers: { 'Content-Type': 'application/json' },
   }).then(async (response) => {
     if (response.status === 404) return null;
+    const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || `Erro na API (${response.status})`);
+      throw new Error(
+        sanitizeClientError(body.error, `Erro na API (${response.status})`),
+      );
     }
-    return response.json();
+    return body;
   });
 }
 

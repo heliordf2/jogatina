@@ -25,46 +25,34 @@ async function ensureDb() {
   }
 }
 
-export function createApp({ serveStatic = false } = {}) {
-  const app = express();
-
-  app.use(cors());
-  app.use(express.json({ limit: '1mb' }));
-
-  if (process.env.VERCEL) {
-    app.use((req, _res, next) => {
-      if (!req.url.startsWith('/api')) {
-        req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
-      }
-      next();
-    });
+export function safeApiError(error) {
+  const message = error?.message || 'Erro interno';
+  if (
+    /127\.0\.0\.1|localhost|ECONNREFUSED|postgres:\/\//i.test(message) ||
+    message.includes('password')
+  ) {
+    return 'Erro de conexão com o servidor';
   }
+  return message;
+}
 
-  app.use(async (_req, _res, next) => {
-    try {
-      await ensureDb();
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get('/api/health', async (_req, res) => {
+function registerApiRoutes(router) {
+  router.get('/health', async (_req, res) => {
     res.json({
       ok: true,
       features: ['chat', 'presence', 'chess-online'],
     });
   });
 
-  app.get('/api/stats', async (_req, res) => {
+  router.get('/stats', async (_req, res) => {
     try {
       res.json(await getGameStats());
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.put('/api/stats', async (req, res) => {
+  router.put('/stats', async (req, res) => {
     try {
       if (!req.body || typeof req.body !== 'object') {
         res.status(400).json({ error: 'Corpo inválido' });
@@ -73,19 +61,19 @@ export function createApp({ serveStatic = false } = {}) {
       await saveGameStats(req.body);
       res.json({ ok: true });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.get('/api/sudoku/scores', async (_req, res) => {
+  router.get('/sudoku/scores', async (_req, res) => {
     try {
       res.json(await getSudokuScores());
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.put('/api/sudoku/scores', async (req, res) => {
+  router.put('/sudoku/scores', async (req, res) => {
     try {
       if (!req.body || typeof req.body !== 'object') {
         res.status(400).json({ error: 'Corpo inválido' });
@@ -94,11 +82,11 @@ export function createApp({ serveStatic = false } = {}) {
       await saveSudokuScores(req.body);
       res.json({ ok: true });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.post('/api/sessions', async (req, res) => {
+  router.post('/sessions', async (req, res) => {
     try {
       const { player, game, mode } = req.body ?? {};
       if (!player || !game) {
@@ -108,20 +96,20 @@ export function createApp({ serveStatic = false } = {}) {
       const session = await recordGameStart({ player, game, mode: mode ?? null });
       res.status(201).json(session);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 
-  app.get('/api/sessions', async (req, res) => {
+  router.get('/sessions', async (req, res) => {
     try {
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       res.json(await listGameSessions(limit));
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.get('/api/chess/game', async (_req, res) => {
+  router.get('/chess/game', async (_req, res) => {
     try {
       const game = await getActiveChessGame();
       if (!game) {
@@ -130,11 +118,11 @@ export function createApp({ serveStatic = false } = {}) {
       }
       res.json(game);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.post('/api/chess/game', async (req, res) => {
+  router.post('/chess/game', async (req, res) => {
     try {
       const { player, forceNew = false } = req.body ?? {};
       if (!player) {
@@ -143,11 +131,11 @@ export function createApp({ serveStatic = false } = {}) {
       }
       res.status(201).json(await getOrCreateChessGame({ player, forceNew: Boolean(forceNew) }));
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 
-  app.post('/api/chess/game/move', async (req, res) => {
+  router.post('/chess/game/move', async (req, res) => {
     try {
       const { player, from, to, promotion } = req.body ?? {};
       if (!player || !from || !to) {
@@ -156,11 +144,11 @@ export function createApp({ serveStatic = false } = {}) {
       }
       res.json(await applyChessMove({ player, from, to, promotion }));
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 
-  app.post('/api/chess/game/resign', async (req, res) => {
+  router.post('/chess/game/resign', async (req, res) => {
     try {
       const { player } = req.body ?? {};
       if (!player) {
@@ -169,19 +157,19 @@ export function createApp({ serveStatic = false } = {}) {
       }
       res.json(await resignChessGame({ player }));
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 
-  app.get('/api/presence', async (_req, res) => {
+  router.get('/presence', async (_req, res) => {
     try {
       res.json(await getPresence());
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.post('/api/presence', async (req, res) => {
+  router.post('/presence', async (req, res) => {
     try {
       const { player } = req.body ?? {};
       if (!player) {
@@ -191,19 +179,19 @@ export function createApp({ serveStatic = false } = {}) {
       await touchPresence(player);
       res.json({ ok: true });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 
-  app.get('/api/chat', async (_req, res) => {
+  router.get('/chat', async (_req, res) => {
     try {
       res.json(await listChatMessages());
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
 
-  app.post('/api/chat', async (req, res) => {
+  router.post('/chat', async (req, res) => {
     try {
       const { sender, player, text } = req.body ?? {};
       if (!sender || !text) {
@@ -212,18 +200,42 @@ export function createApp({ serveStatic = false } = {}) {
       }
       res.status(201).json(await addChatMessage({ sender, player, text }));
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: safeApiError(error) });
     }
   });
 
-  app.delete('/api/chat', async (_req, res) => {
+  router.delete('/chat', async (_req, res) => {
     try {
       await clearChatMessages();
       res.status(204).end();
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: safeApiError(error) });
     }
   });
+}
+
+export function createApp({ serveStatic = false } = {}) {
+  const app = express();
+  const api = express.Router();
+
+  app.use(cors());
+  app.use(express.json({ limit: '1mb' }));
+  app.use(async (_req, _res, next) => {
+    try {
+      await ensureDb();
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  registerApiRoutes(api);
+  app.use('/api', api);
+
+  // Na Vercel o caminho pode chegar sem o prefixo /api
+  if (process.env.VERCEL) {
+    app.use(api);
+  }
 
   if (serveStatic) {
     const distPath = path.join(__dirname, '../dist');
@@ -234,7 +246,7 @@ export function createApp({ serveStatic = false } = {}) {
   }
 
   app.use((error, _req, res, _next) => {
-    res.status(500).json({ error: error.message || 'Erro interno' });
+    res.status(500).json({ error: safeApiError(error) });
   });
 
   return app;

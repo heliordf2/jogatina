@@ -114,13 +114,13 @@ export default function App() {
           );
         }
       })
-      .catch((error) => {
-        const message = import.meta.env.DEV
-          ? 'API offline — rode npm run dev'
-          : error?.message?.includes('DATABASE') || error?.message?.includes('banco')
-            ? 'Erro ao conectar ao banco de dados'
-            : `Servidor indisponível${error?.message ? ` (${error.message})` : ''}`;
-        showToast(message, 5000);
+      .catch(() => {
+        showToast(
+          import.meta.env.DEV
+            ? 'API offline — rode npm run dev'
+            : 'Servidor indisponível — tente novamente em instantes',
+          5000,
+        );
       });
   }, [showToast]);
 
