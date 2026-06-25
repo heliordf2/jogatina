@@ -1,19 +1,38 @@
-import pg from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const { Pool } = pg;
+function useNeonServerless() {
+  return Boolean(process.env.VERCEL) || process.env.USE_NEON_SERVERLESS === '1';
+}
 
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_URL?.includes('localhost') ||
-    process.env.DATABASE_URL?.includes('127.0.0.1')
-      ? false
-      : { rejectUnauthorized: false },
-  max: process.env.VERCEL ? 1 : 10,
-});
+function isLocalDatabase(url = process.env.DATABASE_URL) {
+  return url?.includes('localhost') || url?.includes('127.0.0.1');
+}
+
+async function createPool() {
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL não configurada');
+  }
+
+  if (useNeonServerless()) {
+    const { Pool, neonConfig } = await import('@neondatabase/serverless');
+    const ws = (await import('ws')).default;
+    neonConfig.webSocketConstructor = ws;
+    return new Pool({ connectionString });
+  }
+
+  const pg = await import('pg');
+  return new pg.default.Pool({
+    connectionString,
+    ssl: isLocalDatabase(connectionString) ? false : { rejectUnauthorized: false },
+    max: 10,
+  });
+}
+
+export const pool = await createPool();
 
 const PLAYERS = ['helio', 'thamy'];
 

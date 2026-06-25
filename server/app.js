@@ -27,12 +27,21 @@ async function ensureDb() {
 
 export function safeApiError(error) {
   const message = error?.message || 'Erro interno';
+
+  if (/DATABASE_URL não configurada/i.test(message)) {
+    return 'Banco de dados não configurado no servidor';
+  }
+
   if (
-    /127\.0\.0\.1|localhost|ECONNREFUSED|postgres:\/\//i.test(message) ||
+    /127\.0\.0\.1|localhost|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|timeout|connect/i.test(
+      message,
+    ) ||
+    /postgres:\/\//i.test(message) ||
     message.includes('password')
   ) {
-    return 'Erro de conexão com o servidor';
+    return 'Erro ao acessar o banco de dados';
   }
+
   return message;
 }
 
