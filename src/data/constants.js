@@ -1,3 +1,12 @@
+import {
+  DIFF_REMOVES,
+  SUDOKU_DIFFICULTY_IDS,
+  formatDiffStats,
+  getDiffGivenCount,
+  getDiffEmptyCount,
+  getDiffStats,
+} from '../../shared/sudokuDifficulty.js';
+
 export const DIFF_NAMES = {
   easy: 'Fácil',
   medium: 'Médio',
@@ -12,11 +21,24 @@ export const DIFF_MULT = {
   extreme: 3,
 };
 
-export const DIFF_EMPTY = {
-  easy: '36 vazios',
-  medium: '45 vazios',
-  hard: '51 vazios',
-  extreme: '53 vazios',
+export {
+  DIFF_REMOVES,
+  SUDOKU_DIFFICULTY_IDS,
+  formatDiffStats,
+  getDiffGivenCount,
+  getDiffEmptyCount,
+  getDiffStats,
+};
+
+export const DIFF_EMPTY = Object.fromEntries(
+  SUDOKU_DIFFICULTY_IDS.map((id) => [id, formatDiffStats(id)]),
+);
+
+export const DIFF_EMOJI = {
+  easy: '😊',
+  medium: '😤',
+  hard: '🔥',
+  extreme: '💀',
 };
 
 export const QUICK_MESSAGES = [

@@ -1,5 +1,5 @@
 import IMGS from '../assets/imgs.js';
-import { DIFF_NAMES, PLAYER_NAMES } from '../data/constants.js';
+import { DIFF_NAMES, formatDiffStats, PLAYER_NAMES } from '../data/constants.js';
 import { isPlayerOnlineRemote } from '../hooks/useRemotePresence.js';
 import CurrentPlayerBar from './CurrentPlayerBar.jsx';
 import OtherPlayerBar from './OtherPlayerBar.jsx';
@@ -10,6 +10,14 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+function formatDiffLabel(difficulty) {
+  return DIFF_NAMES[difficulty]?.replace('💀 ', '') ?? difficulty;
+}
+
+function getCollabOpponent(player) {
+  return player === 'helio' ? 'thamy' : 'helio';
 }
 
 export default function GameScreen({
@@ -27,6 +35,9 @@ export default function GameScreen({
   onUseHint,
   onNewGame,
   onToggleTurnLock,
+  onAcceptRematch,
+  onDeclineRematch,
+  rematchBusy = false,
 }) {
   const disabledNums = getDisabledNums(game);
   const turn = game.collabTurn;
@@ -36,9 +47,17 @@ export default function GameScreen({
     !isMyTurn &&
     game.turnLocked;
 
+  const rematchRequestedBy = game.rematchRequestedBy ?? null;
+  const rematchOpponent = onlinePlayer ? getCollabOpponent(onlinePlayer) : null;
+  const waitingRematchApproval = rematchRequestedBy === onlinePlayer;
+  const incomingRematchRequest =
+    rematchRequestedBy && rematchRequestedBy !== onlinePlayer && rematchOpponent === rematchRequestedBy;
+  const newGameLabel = waitingRematchApproval ? '⏳ Aguardando...' : '🔄 Novo';
+  const rematchDisabled = rematchBusy || waitingRematchApproval;
+
   const gameTitle = game.isCollab
-    ? '⚔️ Duelo'
-    : `${PLAYER_NAMES[player]} — ${DIFF_NAMES[diff]}`;
+    ? `⚔️ Duelo — ${formatDiffLabel(diff)} · ${formatDiffStats(diff)}`
+    : `${PLAYER_NAMES[player]} — ${formatDiffLabel(diff)} · ${formatDiffStats(diff)}`;
 
   return (
     <div className="screen active">
@@ -62,34 +81,38 @@ export default function GameScreen({
             <div className="stat-lbl">❌</div>
             <div className="stat-val ev">{game.errors}</div>
           </div>
-        </div>
-      </div>
-
-      {game.isCollab && (
-        <div className={`turn-banner turn-${turn}`}>
-          <div className="turn-left">
-            <div className="avatar-sm">
-              <img src={IMGS[turn]} alt={PLAYER_NAMES[turn]} />
-              <span className={`online-dot avatar-dot sm${isPlayerOnlineRemote(remotePresence, turn) ? ' on' : ''}`} />
-            </div>
-            <span>{PLAYER_NAMES[turn]}</span> — sua vez!
-          </div>
-          <div className="turn-right">
-            {!game.turnLocked
-              ? 'Modo livre — ambos podem jogar!'
-              : turn === onlinePlayer
-                ? 'Sua vez — jogue!'
-                : `Aguardando ${PLAYER_NAMES[turn]}`}
-          </div>
-          {isMyTurn && (
+          {game.isCollab && isMyTurn && (
             <button
               type="button"
-              className={`turn-lock-btn ${game.turnLocked ? 'locked' : 'unlocked'}`}
+              className={`stat-lock-btn ${game.turnLocked ? 'locked' : 'unlocked'}`}
               onClick={onToggleTurnLock}
+              title={game.turnLocked ? 'Vez travada — só você joga' : 'Modo livre — ambos podem jogar'}
             >
               {game.turnLocked ? '🔒 Travado' : '🔓 Livre'}
             </button>
           )}
+        </div>
+      </div>
+
+      {game.isCollab && incomingRematchRequest && (
+        <div className="collab-rematch-banner">
+          <p>
+            <strong>{PLAYER_NAMES[rematchRequestedBy]}</strong> quer iniciar um novo duelo.
+          </p>
+          <div className="collab-rematch-actions">
+            <button type="button" className="btn btn-primary" onClick={onAcceptRematch} disabled={rematchBusy}>
+              ✅ Aceitar
+            </button>
+            <button type="button" className="btn" onClick={onDeclineRematch} disabled={rematchBusy}>
+              Recusar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {game.isCollab && waitingRematchApproval && (
+        <div className="collab-rematch-banner collab-rematch-waiting">
+          <p>Aguardando {PLAYER_NAMES[rematchOpponent]} aceitar o novo duelo...</p>
         </div>
       )}
 
@@ -142,9 +165,13 @@ export default function GameScreen({
       <div className="progress-bar">
         <div className="progress-fill" style={{ width: `${progress.pct}%` }} />
       </div>
-      <p style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', marginBottom: '.5rem' }}>
-        {progress.pct}% concluído ({progress.filled}/{progress.total})
-      </p>
+      <div className="progress-info">
+        <span><strong>{progress.pct}%</strong></span>
+        <span><strong>{progress.filled}</strong> preenchidas</span>
+        <span><strong>{progress.empty}</strong> vazias</span>
+        <span><strong>{progress.given}</strong> fixas</span>
+        <span><strong>{progress.total}</strong> a resolver</span>
+      </div>
 
       <Numpad disabledNums={disabledNums} onEnterNum={onEnterNum} disabled={game.paused} />
 
@@ -167,9 +194,15 @@ export default function GameScreen({
         <button type="button" className="btn" onClick={onUseHint} disabled={game.paused}>
           💡 Dica ({game.hints})
         </button>
-        <button type="button" className="btn btn-danger" onClick={onNewGame}>
-          🔄 Novo
-        </button>
+        {game.isCollab ? (
+          <button type="button" className="btn btn-danger" onClick={onNewGame} disabled={rematchDisabled}>
+            {newGameLabel}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-danger" onClick={onNewGame}>
+            🔄 Novo
+          </button>
+        )}
       </div>
 
       <OtherPlayerBar onlinePlayer={onlinePlayer} remotePresence={remotePresence} />

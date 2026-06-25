@@ -279,6 +279,20 @@ export function postSudokuCollabCell({ player, row, col, value }) {
   });
 }
 
+export function postSudokuCollabRematchRequest({ player }) {
+  return request('/sudoku/collab/game/rematch/request', {
+    method: 'POST',
+    body: JSON.stringify({ player }),
+  });
+}
+
+export function postSudokuCollabRematchRespond({ player, accept }) {
+  return request('/sudoku/collab/game/rematch/respond', {
+    method: 'POST',
+    body: JSON.stringify({ player, accept }),
+  });
+}
+
 export function postSudokuCollabDraft({ player, row, col, num }) {
   return request('/sudoku/collab/game/draft', {
     method: 'POST',

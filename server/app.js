@@ -21,6 +21,8 @@ import {
   applySudokuCollabHint,
   getActiveSudokuCollabGame,
   getOrCreateSudokuCollabGame,
+  requestSudokuCollabRematch,
+  respondSudokuCollabRematch,
   toggleSudokuCollabPause,
   toggleSudokuCollabTurnLock,
 } from './sudokuCollabRepository.js';
@@ -158,6 +160,32 @@ function registerApiRoutes(router) {
           value: Number(value),
         }),
       );
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/rematch/request', async (req, res) => {
+    try {
+      const { player } = req.body ?? {};
+      if (!player) {
+        res.status(400).json({ error: 'player é obrigatório' });
+        return;
+      }
+      res.json(await requestSudokuCollabRematch({ player }));
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/rematch/respond', async (req, res) => {
+    try {
+      const { player, accept } = req.body ?? {};
+      if (!player || accept == null) {
+        res.status(400).json({ error: 'player e accept são obrigatórios' });
+        return;
+      }
+      res.json(await respondSudokuCollabRematch({ player, accept: Boolean(accept) }));
     } catch (error) {
       res.status(400).json({ error: safeApiError(error) });
     }

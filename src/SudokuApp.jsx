@@ -12,6 +12,7 @@ import {
   createInitialGameState,
   DIFF_MULT,
   DIFF_NAMES,
+  formatDiffStats,
   INITIAL_SCORES,
   PLAYER_NAMES,
 } from './data/constants.js';
@@ -21,6 +22,8 @@ import {
   postSudokuCollabCell,
   postSudokuCollabDraft,
   postSudokuCollabHint,
+  postSudokuCollabRematchRequest,
+  postSudokuCollabRematchRespond,
   postSudokuCollabPause,
   postSudokuCollabTurnLock,
 } from './utils/api.js';
@@ -28,6 +31,7 @@ import { syncSudokuStats } from './utils/gameStats.js';
 import { recordGameStart } from './utils/gameSessions.js';
 import { loadScores, saveScores } from './utils/scores.js';
 import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sudoku.js';
+import { createGivenFromPuzzle } from '../../shared/sudokuGenerate.js';
 
 const COLLAB_POLL_MS = 1500;
 
@@ -38,6 +42,14 @@ function canCollabPlay(game, player) {
   return !game.turnLocked;
 }
 
+function getCollabOpponent(player) {
+  return player === 'helio' ? 'thamy' : 'helio';
+}
+
+function formatDiffLabel(difficulty) {
+  return DIFF_NAMES[difficulty]?.replace('💀 ', '') ?? difficulty;
+}
+
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -46,20 +58,25 @@ function formatTime(seconds) {
 
 function calcProgress(game) {
   if (!game.board.length || !game.given.length) {
-    return { filled: 0, total: 0, pct: 0 };
+    return { filled: 0, total: 0, empty: 0, given: 0, pct: 0 };
   }
   let filled = 0;
   let total = 0;
+  let empty = 0;
+  let given = 0;
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
-      if (!game.given[r][c]) {
+      if (game.given[r][c]) {
+        given++;
+      } else {
         total++;
         if (game.board[r][c] === game.solution[r][c]) filled++;
+        if (!game.board[r][c]) empty++;
       }
     }
   }
   const pct = total ? Math.round((filled / total) * 100) : 0;
-  return { filled, total, pct };
+  return { filled, total, empty, given, pct };
 }
 
 function serverGameToLocal(serverGame, prev) {
@@ -85,6 +102,7 @@ function serverGameToLocal(serverGame, prev) {
     serverVersion: serverGame.version,
     serverStatus: serverGame.status,
     serverDifficulty: serverGame.difficulty,
+    rematchRequestedBy: serverGame.rematchRequestedBy ?? null,
   };
 }
 
@@ -108,6 +126,7 @@ export default function SudokuApp({
   const [game, setGame] = useState(createInitialGameState);
   const [winResult, setWinResult] = useState(null);
   const [joiningCollab, setJoiningCollab] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
 
   const timerRef = useRef(null);
   const gameRef = useRef(game);
@@ -190,10 +209,11 @@ export default function SudokuApp({
   const doStartSolo = useCallback(() => {
     stopTimer();
     const { solution, puzzle } = generateSudoku(diff);
+    const given = createGivenFromPuzzle(puzzle);
     setGame({
       board: puzzle.map((r) => [...r]),
       solution,
-      given: puzzle.map((r) => r.map((v) => v !== 0)),
+      given,
       selected: null,
       errors: 0,
       corrects: 0,
@@ -204,6 +224,7 @@ export default function SudokuApp({
       collabCells: { helio: [], thamy: [] },
       collabDrafts: createEmptyCollabDrafts(),
       isCollab: false,
+      difficulty: diff,
       draftMode: false,
       drafts: createEmptyDrafts(),
       turnLocked: false,
@@ -231,7 +252,8 @@ export default function SudokuApp({
 
       setJoiningCollab(true);
       try {
-        const { game: serverGame, joined } = await createOrJoinSudokuCollabGame({
+        const { game: serverGame, joined, replacedDueToDifficulty } =
+          await createOrJoinSudokuCollabGame({
           player: onlinePlayer,
           difficulty: diff,
           forceNew,
@@ -247,12 +269,30 @@ export default function SudokuApp({
 
         if (joined) {
           addChatMsg('system', null, `🤝 ${PLAYER_NAMES[onlinePlayer]} entrou no duelo online!`);
+          if (serverGame.difficulty) {
+            showToast(
+              `Duelo ${formatDiffLabel(serverGame.difficulty)} · ${formatDiffStats(serverGame.difficulty)}`,
+              2500,
+            );
+          }
         } else {
-          addChatMsg(
-            'system',
-            null,
-            `🎮 Duelo online! ${PLAYER_NAMES[serverGame.collabTurn]} começa jogando.`,
-          );
+          if (replacedDueToDifficulty) {
+            addChatMsg(
+              'system',
+              null,
+              `🔄 Novo duelo ${formatDiffLabel(serverGame.difficulty)} (${formatDiffStats(serverGame.difficulty)})`,
+            );
+            showToast(
+              `Duelo anterior encerrado — ${formatDiffLabel(serverGame.difficulty)} · ${formatDiffStats(serverGame.difficulty)}`,
+              3000,
+            );
+          } else {
+            addChatMsg(
+              'system',
+              null,
+              `🎮 Duelo online! ${PLAYER_NAMES[serverGame.collabTurn]} começa jogando.`,
+            );
+          }
         }
 
         if (serverGame.status === 'won') handleCollabWin(serverGame);
@@ -327,7 +367,8 @@ export default function SudokuApp({
   );
 
   useEffect(() => {
-    if (screen !== 'game' || !game.isCollab) return undefined;
+    const collabActive = game.isCollab || (screen === 'win' && winResult?.collabDetail);
+    if ((screen !== 'game' && screen !== 'win') || !collabActive) return undefined;
 
     let cancelled = false;
 
@@ -336,13 +377,37 @@ export default function SudokuApp({
         const serverGame = await fetchActiveSudokuCollabGame();
         if (cancelled || !serverGame) return;
 
-        if (serverGame.version !== lastVersionRef.current) {
+        const isNewGame = serverGame.id !== gameRef.current.serverId;
+        if (serverGame.version !== lastVersionRef.current || isNewGame) {
           lastVersionRef.current = serverGame.version;
+
+          if (serverGame.status === 'playing' && isNewGame) {
+            winHandledRef.current = null;
+            setWinResult(null);
+            setScreen('game');
+            setGame(serverGameToLocal(serverGame, null));
+            if (serverGame.difficulty) setDiff(serverGame.difficulty);
+            addChatMsg(
+              'system',
+              null,
+              `🎮 Novo duelo ${formatDiffLabel(serverGame.difficulty)}! ${PLAYER_NAMES[serverGame.collabTurn]} começa.`,
+            );
+            return;
+          }
+
           setGame((prev) => serverGameToLocal(serverGame, prev));
           if (serverGame.difficulty) setDiff(serverGame.difficulty);
           if (serverGame.status === 'won') handleCollabWin(serverGame);
         } else {
-          setGame((prev) => (prev.isCollab ? { ...prev, timer: serverGame.timer } : prev));
+          setGame((prev) =>
+            prev.isCollab || prev.rematchRequestedBy != null
+              ? {
+                  ...prev,
+                  timer: serverGame.timer,
+                  rematchRequestedBy: serverGame.rematchRequestedBy ?? null,
+                }
+              : { ...prev, timer: serverGame.timer },
+          );
         }
       } catch {
         // ignore transient sync errors
@@ -355,7 +420,7 @@ export default function SudokuApp({
       cancelled = true;
       clearInterval(id);
     };
-  }, [game.isCollab, handleCollabWin, screen]);
+  }, [addChatMsg, game.isCollab, handleCollabWin, screen, winResult?.collabDetail]);
 
   const selectCell = useCallback(
     (r, c) => {
@@ -593,11 +658,93 @@ export default function SudokuApp({
     });
   }, [applyServerCollabGame, checkWin, onlinePlayer, showToast]);
 
+  const handleRematchResult = useCallback(
+    (result) => {
+      const { action, game: serverGame } = result;
+
+      if (action === 'accepted') {
+        winHandledRef.current = null;
+        lastVersionRef.current = serverGame.version;
+        setWinResult(null);
+        setGame(serverGameToLocal(serverGame, null));
+        if (serverGame.difficulty) setDiff(serverGame.difficulty);
+        setScreen('game');
+        recordGameStart(onlinePlayer, 'sudoku', 'collab');
+        addChatMsg(
+          'system',
+          null,
+          `🎮 Novo duelo ${formatDiffLabel(serverGame.difficulty)}! ${PLAYER_NAMES[serverGame.collabTurn]} começa.`,
+        );
+        showToast('Nova partida iniciada!', 2000);
+        return;
+      }
+
+      applyServerCollabGame(serverGame);
+
+      if (action === 'requested' || action === 'pending') {
+        const opponent = getCollabOpponent(onlinePlayer);
+        addChatMsg('system', null, `🔄 ${PLAYER_NAMES[onlinePlayer]} pediu um novo duelo.`);
+        showToast(`Pedido enviado — aguardando ${PLAYER_NAMES[opponent]}`, 2500);
+      } else if (action === 'declined') {
+        addChatMsg('system', null, `❌ ${PLAYER_NAMES[onlinePlayer]} recusou o novo duelo.`);
+        showToast('Pedido de nova partida recusado', 2000);
+      }
+    },
+    [addChatMsg, applyServerCollabGame, onlinePlayer, showToast],
+  );
+
+  const handleRequestRematch = useCallback(async () => {
+    if (!onlinePlayer || rematchBusy) return;
+    if (gameRef.current.rematchRequestedBy === onlinePlayer) {
+      showToast('Aguardando aprovação do outro jogador');
+      return;
+    }
+
+    setRematchBusy(true);
+    try {
+      const result = await postSudokuCollabRematchRequest({ player: onlinePlayer });
+      handleRematchResult(result);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setRematchBusy(false);
+    }
+  }, [handleRematchResult, onlinePlayer, rematchBusy, showToast]);
+
+  const handleAcceptRematch = useCallback(async () => {
+    if (!onlinePlayer || rematchBusy) return;
+    setRematchBusy(true);
+    try {
+      const result = await postSudokuCollabRematchRespond({ player: onlinePlayer, accept: true });
+      handleRematchResult(result);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setRematchBusy(false);
+    }
+  }, [handleRematchResult, onlinePlayer, rematchBusy, showToast]);
+
+  const handleDeclineRematch = useCallback(async () => {
+    if (!onlinePlayer || rematchBusy) return;
+    setRematchBusy(true);
+    try {
+      const result = await postSudokuCollabRematchRespond({ player: onlinePlayer, accept: false });
+      handleRematchResult(result);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setRematchBusy(false);
+    }
+  }, [handleRematchResult, onlinePlayer, rematchBusy, showToast]);
+
   const newGame = useCallback(() => {
+    if (game.isCollab || winResult?.collabDetail) {
+      void handleRequestRematch();
+      return;
+    }
     stopTimer();
-    if (game.isCollab) startCollab(true);
-    else startSolo();
-  }, [game.isCollab, startCollab, startSolo, stopTimer]);
+    startSolo();
+  }, [game.isCollab, handleRequestRematch, startSolo, stopTimer, winResult?.collabDetail]);
 
   const moveSel = useCallback(
     (dr, dc) => {
@@ -660,7 +807,11 @@ export default function SudokuApp({
       {screen === 'game' && (
         <GameScreen
           game={game}
-          diff={diff}
+          diff={
+            game.isCollab
+              ? (game.serverDifficulty ?? diff)
+              : (game.difficulty ?? diff)
+          }
           player={onlinePlayer}
           onlinePlayer={onlinePlayer}
           remotePresence={remotePresence}
@@ -673,6 +824,9 @@ export default function SudokuApp({
           onUseHint={useHint}
           onNewGame={newGame}
           onToggleTurnLock={toggleTurnLock}
+          onAcceptRematch={handleAcceptRematch}
+          onDeclineRematch={handleDeclineRematch}
+          rematchBusy={rematchBusy}
         />
       )}
 
@@ -681,6 +835,12 @@ export default function SudokuApp({
           result={winResult}
           onShowRanking={() => setScreen('ranking')}
           onGoHome={goHome}
+          onlinePlayer={onlinePlayer}
+          rematchRequestedBy={game.rematchRequestedBy}
+          onRequestRematch={handleRequestRematch}
+          onAcceptRematch={handleAcceptRematch}
+          onDeclineRematch={handleDeclineRematch}
+          rematchBusy={rematchBusy}
         />
       )}
 

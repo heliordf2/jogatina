@@ -139,6 +139,9 @@ export async function initDb() {
     ALTER TABLE sudoku_collab_games
       ADD COLUMN IF NOT EXISTS collab_drafts JSONB NOT NULL DEFAULT '{"helio":[[],[],[],[],[],[],[],[],[]],"thamy":[[],[],[],[],[],[],[],[],[]]}';
 
+    ALTER TABLE sudoku_collab_games
+      ADD COLUMN IF NOT EXISTS rematch_requested_by TEXT REFERENCES players(id);
+
     CREATE TABLE IF NOT EXISTS player_presence (
       player_id TEXT PRIMARY KEY REFERENCES players(id),
       last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()

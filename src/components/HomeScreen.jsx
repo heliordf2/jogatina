@@ -1,5 +1,6 @@
 import { DIFF_EMPTY } from '../data/constants.js';
 import CurrentPlayerBar from './CurrentPlayerBar.jsx';
+import DifficultyPicker from './DifficultyPicker.jsx';
 
 export default function HomeScreen({
   mode,
@@ -55,24 +56,7 @@ export default function HomeScreen({
 
       {mode === 'solo' ? (
         <div>
-          <div className="diff-label">Dificuldade:</div>
-          <div className="diff-select">
-            {['easy', 'medium', 'hard', 'extreme'].map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`diff-btn${d === 'extreme' ? ' extreme' : ''}${diff === d ? ' active' : ''}`}
-                onClick={() => onSetDiff(d)}
-              >
-                {d === 'easy' && '😊 Fácil'}
-                {d === 'medium' && '😤 Médio'}
-                {d === 'hard' && '🔥 Difícil'}
-                {d === 'extreme' && '💀 Extremo'}
-                <br />
-                <span style={{ fontSize: 10, opacity: 0.7 }}>{DIFF_EMPTY[d]}</span>
-              </button>
-            ))}
-          </div>
+          <DifficultyPicker diff={diff} onSetDiff={onSetDiff} />
           <button type="button" className="btn btn-primary" onClick={onStartSolo}>
             ▶ Iniciar Jogo Solo
           </button>
@@ -89,22 +73,7 @@ export default function HomeScreen({
               Quem inicia cria o puzzle — o outro entra na mesma partida ao clicar em Iniciar.
             </p>
           </div>
-          <div className="diff-label">Dificuldade:</div>
-          <div className="diff-select">
-            {['easy', 'medium', 'hard', 'extreme'].map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`diff-btn${d === 'extreme' ? ' extreme' : ''}${diff === d ? ' active' : ''}`}
-                onClick={() => onSetDiff(d)}
-              >
-                {d === 'easy' && '😊 Fácil'}
-                {d === 'medium' && '😤 Médio'}
-                {d === 'hard' && '🔥 Difícil'}
-                {d === 'extreme' && '💀 Extremo'}
-              </button>
-            ))}
-          </div>
+          <DifficultyPicker diff={diff} onSetDiff={onSetDiff} />
           <button
             type="button"
             className="btn btn-primary"

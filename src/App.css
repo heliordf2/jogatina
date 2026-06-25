@@ -75,12 +75,20 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 
 .diff-label{font-size:14px;color:var(--text2);margin-bottom:.6rem;font-weight:500}
-.diff-select{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:1.25rem}
-.diff-btn{padding:9px 6px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--surface);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s}
-.diff-btn:hover{border-color:var(--c2);color:var(--c2)}
+.difficulty-picker{margin-bottom:1rem}
+.diff-select{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:.6rem}
+.diff-btn{padding:8px 4px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:72px;justify-content:center}
+.diff-btn .diff-name{display:block;font-size:12px;font-weight:600;line-height:1.2}
+.diff-btn .diff-meta{display:block;font-size:10px;line-height:1.25;color:var(--text2)}
+.diff-btn:hover{border-color:var(--c2)}
+.diff-btn:hover .diff-meta{color:var(--c2)}
 .diff-btn.active{background:var(--c2);color:#fff;border-color:var(--c2)}
+.diff-btn.active .diff-meta{color:rgba(255,255,255,.9)}
 .diff-btn.extreme.active{background:#7F1D1D;border-color:#7F1D1D}
-.diff-btn.extreme:hover{border-color:#7F1D1D;color:#7F1D1D}
+.diff-btn.extreme:hover{border-color:#7F1D1D}
+.diff-btn.extreme:hover .diff-meta{color:#7F1D1D}
+.diff-preview{background:var(--surface1);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--text2);text-align:center;margin-bottom:1rem}
+.diff-preview strong{color:var(--text)}
 
 .info-box{background:var(--surface1);border-radius:12px;padding:1rem 1.25rem;border:1px solid var(--border);margin-bottom:1rem}
 .info-box h3{font-size:14px;font-weight:600;margin-bottom:.4rem}
@@ -117,9 +125,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .stat-val{font-size:16px;font-weight:700}
 .stat-val.cv{color:var(--c2)}
 .stat-val.ev{color:#E24B4A}
+.stat-lock-btn{align-self:stretch;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;border:1.5px solid var(--border);background:var(--surface);min-width:48px}
+.stat-lock-btn.unlocked{color:var(--text);border-color:var(--c2)}
+.stat-lock-btn.unlocked:hover{background:var(--surface1);border-color:var(--c2)}
+.stat-lock-btn.locked{background:#E24B4A;color:#fff;border-color:#c93a39}
+.stat-lock-btn.locked:hover{background:#c93a39}
 
 /* Turn banner */
 .turn-banner{border-radius:10px;padding:9px 14px;margin-bottom:.6rem;display:flex;align-items:center;justify-content:space-between;border:1.5px solid;gap:8px}
+.collab-rematch-banner{background:var(--surface1);border:1.5px solid var(--c1);border-radius:12px;padding:12px 14px;margin-bottom:.75rem;text-align:center}
+.collab-rematch-banner p{font-size:14px;margin-bottom:.65rem;color:var(--text)}
+.collab-rematch-waiting{border-color:var(--border2)}
+.collab-rematch-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .turn-helio{background:#EEEDFE;border-color:#AFA9EC;color:#3C3489}
 .turn-thamy{background:#FBEAF0;border-color:#ED93B1;color:#72243E}
 .turn-left{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
@@ -180,6 +197,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 .progress-bar{height:6px;background:var(--surface1);border-radius:4px;margin-bottom:.4rem;overflow:hidden;border:1px solid var(--border)}
 .progress-fill{height:100%;border-radius:4px;transition:width .4s;background:linear-gradient(90deg,var(--c1),var(--c2))}
+.progress-info{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 12px;font-size:11px;color:var(--text3);margin-bottom:.75rem}
+.progress-info span{white-space:nowrap}
+.progress-info strong{color:var(--text);font-weight:700}
 
 .numpad{display:flex;gap:6px;justify-content:center;margin-bottom:.5rem;flex-wrap:wrap}
 .num-btn{width:46px;height:46px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface);font-size:18px;font-weight:600;cursor:pointer;transition:all .12s;color:var(--text);font-family:inherit}

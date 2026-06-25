@@ -6,8 +6,7 @@ import {
   isBoardComplete,
   isCellLocked,
 } from './sudokuEngine.js';
-
-const VALID_DIFFICULTIES = new Set(['easy', 'medium', 'hard', 'extreme']);
+import { VALID_SUDOKU_DIFFICULTIES } from '../shared/sudokuDifficulty.js';
 
 function parseJson(value, fallback) {
   if (value == null) return fallback;
@@ -105,6 +104,7 @@ export function formatSudokuCollabGame(row) {
     status: row.status,
     version: row.version,
     createdBy: row.created_by,
+    rematchRequestedBy: row.rematch_requested_by ?? null,
     updatedAt: row.updated_at,
   };
 }
@@ -122,8 +122,76 @@ async function getActiveGameRow(client = pool) {
 
 export async function getActiveSudokuCollabGame() {
   const row = await getActiveGameRow();
-  if (!row) return null;
-  return formatSudokuCollabGame(row);
+  if (row) return formatSudokuCollabGame(row);
+
+  const pending = await pool.query(`
+    SELECT *
+    FROM sudoku_collab_games
+    WHERE rematch_requested_by IS NOT NULL
+      AND status IN ('playing', 'won')
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `);
+  const pendingRow = pending.rows[0] ?? null;
+  return pendingRow ? formatSudokuCollabGame(pendingRow) : null;
+}
+
+async function insertSudokuCollabGame(client, difficulty, createdBy) {
+  const { solution, puzzle } = generateSudoku(difficulty);
+  const initial = createInitialRow({ difficulty, puzzle, solution, createdBy });
+
+  const inserted = await client.query(
+    `
+      INSERT INTO sudoku_collab_games (
+        difficulty, puzzle, solution, board, given,
+        collab_turn, collab_scores, collab_cells, collab_drafts,
+        errors, corrects, hints, turn_locked, paused,
+        timer_seconds, status, created_by
+      )
+      VALUES (
+        $1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb,
+        $6, $7::jsonb, $8::jsonb, $9::jsonb,
+        $10, $11, $12, $13, $14,
+        $15, $16, $17
+      )
+      RETURNING *
+    `,
+    [
+      initial.difficulty,
+      JSON.stringify(puzzle),
+      JSON.stringify(solution),
+      JSON.stringify(initial.board),
+      JSON.stringify(initial.given),
+      initial.collab_turn,
+      JSON.stringify(initial.collab_scores),
+      JSON.stringify(initial.collab_cells),
+      JSON.stringify(initial.collab_drafts),
+      initial.errors,
+      initial.corrects,
+      initial.hints,
+      initial.turn_locked,
+      initial.paused,
+      initial.timer_seconds,
+      initial.status,
+      initial.created_by,
+    ],
+  );
+
+  return inserted.rows[0];
+}
+
+async function getRematchableSudokuRow(client) {
+  const active = await getActiveGameRow(client);
+  if (active) return active;
+
+  const result = await client.query(`
+    SELECT *
+    FROM sudoku_collab_games
+    WHERE status = 'won'
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `);
+  return result.rows[0] ?? null;
 }
 
 function createInitialRow({ difficulty, puzzle, solution, createdBy }) {
@@ -151,7 +219,7 @@ function createInitialRow({ difficulty, puzzle, solution, createdBy }) {
 
 export async function getOrCreateSudokuCollabGame({ player, difficulty, forceNew = false }) {
   assertValidPlayer(player);
-  if (!VALID_DIFFICULTIES.has(difficulty)) {
+  if (!VALID_SUDOKU_DIFFICULTIES.has(difficulty)) {
     throw new Error('Dificuldade inválida');
   }
 
@@ -160,12 +228,15 @@ export async function getOrCreateSudokuCollabGame({ player, difficulty, forceNew
     await client.query('BEGIN');
 
     const existing = await getActiveGameRow(client);
-    if (existing && !forceNew) {
+    let replacedDueToDifficulty = false;
+
+    if (existing && !forceNew && existing.difficulty === difficulty) {
       await client.query('COMMIT');
       return { game: formatSudokuCollabGame(existing), joined: existing.created_by !== player };
     }
 
-    if (existing && forceNew) {
+    if (existing && (forceNew || existing.difficulty !== difficulty)) {
+      replacedDueToDifficulty = !forceNew && existing.difficulty !== difficulty;
       await client.query(
         `
           UPDATE sudoku_collab_games
@@ -176,48 +247,14 @@ export async function getOrCreateSudokuCollabGame({ player, difficulty, forceNew
       );
     }
 
-    const { solution, puzzle } = generateSudoku(difficulty);
-    const initial = createInitialRow({ difficulty, puzzle, solution, createdBy: player });
-
-    const inserted = await client.query(
-      `
-        INSERT INTO sudoku_collab_games (
-          difficulty, puzzle, solution, board, given,
-          collab_turn, collab_scores, collab_cells, collab_drafts,
-          errors, corrects, hints, turn_locked, paused,
-          timer_seconds, status, created_by
-        )
-        VALUES (
-          $1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb,
-          $6, $7::jsonb, $8::jsonb, $9::jsonb,
-          $10, $11, $12, $13, $14,
-          $15, $16, $17
-        )
-        RETURNING *
-      `,
-      [
-        initial.difficulty,
-        JSON.stringify(puzzle),
-        JSON.stringify(solution),
-        JSON.stringify(initial.board),
-        JSON.stringify(initial.given),
-        initial.collab_turn,
-        JSON.stringify(initial.collab_scores),
-        JSON.stringify(initial.collab_cells),
-        JSON.stringify(initial.collab_drafts),
-        initial.errors,
-        initial.corrects,
-        initial.hints,
-        initial.turn_locked,
-        initial.paused,
-        initial.timer_seconds,
-        initial.status,
-        initial.created_by,
-      ],
-    );
+    const inserted = await insertSudokuCollabGame(client, difficulty, player);
 
     await client.query('COMMIT');
-    return { game: formatSudokuCollabGame(inserted.rows[0]), joined: false };
+    return {
+      game: formatSudokuCollabGame(inserted),
+      joined: false,
+      replacedDueToDifficulty,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -644,6 +681,119 @@ export async function toggleSudokuCollabPause({ player, paused }) {
 
     await client.query('COMMIT');
     return { game: formatSudokuCollabGame(updated) };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function requestSudokuCollabRematch({ player }) {
+  assertValidPlayer(player);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const row = await getRematchableSudokuRow(client);
+    if (!row) {
+      throw new Error('Nenhum duelo para reiniciar');
+    }
+
+    if (row.rematch_requested_by === player) {
+      await client.query('COMMIT');
+      return { action: 'pending', game: formatSudokuCollabGame(row) };
+    }
+
+    if (row.rematch_requested_by && row.rematch_requested_by !== player) {
+      await client.query('ROLLBACK');
+      return respondSudokuCollabRematch({ player, accept: true });
+    }
+
+    const updated = await client.query(
+      `
+        UPDATE sudoku_collab_games
+        SET rematch_requested_by = $2, version = version + 1, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [row.id, player],
+    );
+
+    await client.query('COMMIT');
+    return { action: 'requested', game: formatSudokuCollabGame(updated.rows[0]) };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function respondSudokuCollabRematch({ player, accept }) {
+  assertValidPlayer(player);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(`
+      SELECT *
+      FROM sudoku_collab_games
+      WHERE rematch_requested_by IS NOT NULL
+        AND status IN ('playing', 'won')
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `);
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error('Nenhum pedido de nova partida pendente');
+    }
+
+    if (row.rematch_requested_by === player) {
+      throw new Error('Aguarde a resposta do outro jogador');
+    }
+
+    if (!accept) {
+      const updated = await client.query(
+        `
+          UPDATE sudoku_collab_games
+          SET rematch_requested_by = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [row.id],
+      );
+      await client.query('COMMIT');
+      return { action: 'declined', game: formatSudokuCollabGame(updated.rows[0]) };
+    }
+
+    const requester = row.rematch_requested_by;
+
+    if (row.status === 'playing') {
+      await client.query(
+        `
+          UPDATE sudoku_collab_games
+          SET status = 'abandoned', rematch_requested_by = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1
+        `,
+        [row.id],
+      );
+    } else {
+      await client.query(
+        `
+          UPDATE sudoku_collab_games
+          SET rematch_requested_by = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1
+        `,
+        [row.id],
+      );
+    }
+
+    const inserted = await insertSudokuCollabGame(client, row.difficulty, requester);
+    await client.query('COMMIT');
+    return { action: 'accepted', game: formatSudokuCollabGame(inserted) };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
