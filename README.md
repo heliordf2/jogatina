@@ -23,6 +23,8 @@ As estatísticas (Sudoku + Xadrez) e o ranking do Sudoku são salvos no PostgreS
 | `GET/PUT /api/stats` | Estatísticas da home |
 | `GET/PUT /api/sudoku/scores` | Ranking detalhado do Sudoku |
 | `GET /api/health` | Verifica conexão com o banco |
+| `GET /api/sessions` | Histórico de inícios de jogo |
+| `POST /api/sessions` | Registra início de jogo (usuário, data, hora, jogo) |
 
 Tabelas criadas automaticamente no PostgreSQL:
 
@@ -32,6 +34,7 @@ Tabelas criadas automaticamente no PostgreSQL:
 | `sudoku_player_stats` | Totais do Sudoku por jogador |
 | `sudoku_games` | Histórico de partidas do Sudoku |
 | `chess_player_stats` | Vitórias/derrotas/empates no Xadrez |
+| `game_sessions` | Início de cada partida (usuário, data, hora, jogo) |
 
 Schema em `server/schema.sql`.
 

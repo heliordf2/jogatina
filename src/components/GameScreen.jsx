@@ -22,6 +22,7 @@ export default function GameScreen({
   onSelectCell,
   onEnterNum,
   onToggleDraft,
+  onTogglePause,
   onUseHint,
   onNewGame,
   onToggleTurnLock,
@@ -48,7 +49,7 @@ export default function GameScreen({
         <div className="stats-row">
           <div className="stat-box">
             <div className="stat-lbl">⏱</div>
-            <div className="stat-val">{formatTime(game.timer)}</div>
+            <div className="stat-val">{game.paused ? '⏸' : formatTime(game.timer)}</div>
           </div>
           <div className="stat-box">
             <div className="stat-lbl">✅</div>
@@ -121,6 +122,15 @@ export default function GameScreen({
 
       <div className="board-wrap">
         <SudokuGrid game={game} onSelectCell={onSelectCell} />
+        <div className={`board-paused-msg${game.paused ? ' show' : ''}`}>
+          <div className="board-paused-inner">
+            <div className="board-paused-icon">⏸</div>
+            <div>Pausado</div>
+            <button type="button" className="btn btn-primary" onClick={onTogglePause}>
+              ▶ Continuar
+            </button>
+          </div>
+        </div>
         <div className={`board-locked-msg${boardLocked ? ' show' : ''}`}>
           <div className="board-locked-inner">
             🔒 <strong>{PLAYER_NAMES[turn]}</strong> travou a vez — aguarde!
@@ -135,17 +145,25 @@ export default function GameScreen({
         {progress.pct}% concluído ({progress.filled}/{progress.total})
       </p>
 
-      <Numpad disabledNums={disabledNums} onEnterNum={onEnterNum} />
+      <Numpad disabledNums={disabledNums} onEnterNum={onEnterNum} disabled={game.paused} />
 
       <div className="actions">
         <button
           type="button"
+          className={`btn${game.paused ? ' btn-primary' : ''}`}
+          onClick={onTogglePause}
+        >
+          {game.paused ? '▶ Continuar' : '⏸ Pausar'}
+        </button>
+        <button
+          type="button"
           className={`btn btn-draft${game.draftMode ? ' on' : ''}`}
           onClick={onToggleDraft}
+          disabled={game.paused}
         >
           {game.draftMode ? '✏️ Rascunho ON' : '✏️ Rascunho'}
         </button>
-        <button type="button" className="btn" onClick={onUseHint}>
+        <button type="button" className="btn" onClick={onUseHint} disabled={game.paused}>
           💡 Dica ({game.hints})
         </button>
         <button type="button" className="btn btn-danger" onClick={onNewGame}>

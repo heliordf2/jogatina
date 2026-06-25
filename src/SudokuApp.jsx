@@ -16,6 +16,7 @@ import {
   PLAYER_NAMES,
 } from './data/constants.js';
 import { syncSudokuStats } from './utils/gameStats.js';
+import { recordGameStart } from './utils/gameSessions.js';
 import { loadScores, saveScores } from './utils/scores.js';
 import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sudoku.js';
 
@@ -104,9 +105,13 @@ export default function SudokuApp({
         draftMode: false,
         drafts: createEmptyDrafts(),
         turnLocked: false,
+        paused: false,
       });
       setScreen('game');
       startTimer();
+
+      const sessionPlayer = collab ? currentMyself : player;
+      recordGameStart(sessionPlayer, 'sudoku', collab ? 'collab' : 'solo');
 
       if (collab && currentMyself) {
         addChatMsg(
@@ -116,7 +121,7 @@ export default function SudokuApp({
         );
       }
     },
-    [addChatMsg, diff, startTimer, stopTimer],
+    [addChatMsg, diff, player, startTimer, stopTimer],
   );
 
   const startSolo = useCallback(() => {
@@ -255,6 +260,7 @@ export default function SudokuApp({
   const selectCell = useCallback(
     (r, c) => {
       setGame((g) => {
+        if (g.paused) return g;
         if (g.given[r][c] || isCellLocked(g, r, c)) return g;
         if (g.isCollab && g.collabTurn !== myself) {
           if (g.turnLocked) {
@@ -273,6 +279,7 @@ export default function SudokuApp({
   const enterNum = useCallback(
     (n) => {
       setGame((g) => {
+        if (g.paused) return g;
         if (!g.selected) {
           showToast('Selecione uma célula!');
           return g;
@@ -376,6 +383,18 @@ export default function SudokuApp({
     setGame((g) => ({ ...g, draftMode: !g.draftMode }));
   }, []);
 
+  const togglePause = useCallback(() => {
+    setGame((g) => {
+      const paused = !g.paused;
+      if (paused) {
+        stopTimer();
+        return { ...g, paused: true, selected: null };
+      }
+      startTimer();
+      return { ...g, paused: false };
+    });
+  }, [startTimer, stopTimer]);
+
   const toggleTurnLock = useCallback(() => {
     setGame((g) => {
       if (g.collabTurn !== myself) {
@@ -393,6 +412,7 @@ export default function SudokuApp({
 
   const useHint = useCallback(() => {
     setGame((g) => {
+      if (g.paused) return g;
       if (g.hints <= 0) {
         showToast('Sem dicas restantes!');
         return g;
@@ -525,6 +545,7 @@ export default function SudokuApp({
           onSelectCell={selectCell}
           onEnterNum={enterNum}
           onToggleDraft={toggleDraft}
+          onTogglePause={togglePause}
           onUseHint={useHint}
           onNewGame={newGame}
           onToggleTurnLock={toggleTurnLock}

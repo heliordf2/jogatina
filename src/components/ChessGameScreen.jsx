@@ -11,6 +11,7 @@ import {
   PIECE_SYMBOLS,
 } from '../utils/chessHelpers.js';
 import { recordChessResult } from '../utils/gameStats.js';
+import { recordGameStart } from '../utils/gameSessions.js';
 import { playCaptureSound, playCheckSound, playMoveSound, unlockAudio } from '../utils/chessSounds.js';
 
 const MOVE_HIGHLIGHT = 'radial-gradient(circle, rgba(16, 185, 129, 0.55) 22%, transparent 22%)';
@@ -53,6 +54,7 @@ export default function ChessGameScreen({
   onlinePlayer,
   onGoHome,
   onSwitchPlayer,
+  onTurnHandoff,
   onSystemMessage,
   showToast,
 }) {
@@ -80,6 +82,10 @@ export default function ChessGameScreen({
   useEffect(() => {
     unlockAudio();
   }, []);
+
+  useEffect(() => {
+    onTurnHandoff?.('helio');
+  }, [onTurnHandoff]);
 
   useEffect(() => {
     if (!gameState.winner || recordedResultRef.current) return;
@@ -161,6 +167,11 @@ export default function ChessGameScreen({
         winner,
       });
 
+      if (!winner && status !== 'draw' && status !== 'checkmate') {
+        const nextPlayer = chess.turn() === 'w' ? 'helio' : 'thamy';
+        onTurnHandoff?.(nextPlayer);
+      }
+
       if (winner && winner !== 'draw') {
         onSystemMessage(`🏆 ${PLAYER_NAMES[winner]} venceu a partida!`);
       } else if (winner === 'draw') {
@@ -238,6 +249,8 @@ export default function ChessGameScreen({
     setSelectedSquare(null);
     prevMovesCount.current = 0;
     recordedResultRef.current = false;
+    if (myself) recordGameStart(myself, 'chess');
+    onTurnHandoff?.('helio');
     onSystemMessage('♟️ Nova partida iniciada!');
   }
 
@@ -277,10 +290,19 @@ export default function ChessGameScreen({
             <span className={`online-dot avatar-dot sm${isPlayerOnline(onlinePlayer, activePlayer) ? ' on' : ''}`} />
           </div>
           <span style={{ color: PLAYER_COLORS[activePlayer] }}>{PLAYER_NAMES[activePlayer]}</span>
-          {isPlaying && (gameState.status === 'check' ? ' — Xeque!' : ' — sua vez!')}
+          {isPlaying &&
+            (gameState.status === 'check'
+              ? ' — Xeque!'
+              : myself === activePlayer
+                ? ' — sua vez!'
+                : ' — aguardando...')}
         </div>
         <div className="turn-right">
-          {myself ? `Você: ${PLAYER_NAMES[myself]}` : 'Identifique-se'}
+          {myself === activePlayer
+            ? 'Sua vez — jogue!'
+            : myself
+              ? `Passe para ${PLAYER_NAMES[activePlayer]}`
+              : 'Identifique-se'}
         </div>
       </div>
 
@@ -303,6 +325,7 @@ export default function ChessGameScreen({
         <CapturedPanel label={PLAYER_NAMES.thamy} pieces={blackLost} color="black" />
         <div className="board-container">
           <Chessboard
+            key={`${gameState.fen}-${myself ?? 'guest'}`}
             options={{
               position: gameState.fen,
               boardOrientation,

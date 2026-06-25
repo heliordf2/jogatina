@@ -120,6 +120,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .board-locked-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);border-radius:4px;z-index:10;pointer-events:none;opacity:0;transition:opacity .3s}
 .board-locked-msg.show{opacity:1;pointer-events:all}
 .board-locked-inner{background:var(--surface);border-radius:14px;padding:1rem 1.5rem;text-align:center;font-size:14px;font-weight:600}
+.board-paused-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);border-radius:4px;z-index:11;pointer-events:none;opacity:0;transition:opacity .25s}
+.board-paused-msg.show{opacity:1;pointer-events:all}
+.board-paused-inner{background:var(--surface);border-radius:14px;padding:1.25rem 1.5rem;text-align:center;font-size:14px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:.65rem}
+.board-paused-icon{font-size:28px;line-height:1}
+.sudoku-grid.paused .cell{cursor:default}
+.numpad-disabled{opacity:.45;pointer-events:none}
 
 /* Collab score pills */
 .collab-scores{display:flex;gap:8px;margin-bottom:.6rem}

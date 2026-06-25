@@ -29,6 +29,21 @@ export default function App() {
     applyTheme(theme);
   }, [theme]);
 
+  useEffect(() => {
+    const syncPresence = () => setOnlinePlayer(readPresence());
+    const onStorage = (event) => {
+      if (event.key === 'jogatina_online') syncPresence();
+    };
+    const onPresence = () => syncPresence();
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('jogatina-presence', onPresence);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('jogatina-presence', onPresence);
+    };
+  }, []);
+
   const handleToggleTheme = useCallback(() => {
     setTheme((current) => toggleTheme(current));
   }, []);

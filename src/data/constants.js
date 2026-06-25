@@ -77,5 +77,6 @@ export function createInitialGameState() {
     draftMode: false,
     drafts: createEmptyDrafts(),
     turnLocked: false,
+    paused: false,
   };
 }

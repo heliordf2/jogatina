@@ -43,3 +43,10 @@ export function saveSudokuScoresApi(scores) {
 export function checkApiHealth() {
   return request('/health');
 }
+
+export function recordGameStartApi({ player, game, mode = null }) {
+  return request('/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ player, game, mode }),
+  });
+}

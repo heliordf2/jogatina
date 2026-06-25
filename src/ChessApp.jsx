@@ -5,6 +5,7 @@ import PlayerPresence from './components/PlayerPresence.jsx';
 import SharedChat from './components/SharedChat.jsx';
 import WhoAmI from './components/WhoAmI.jsx';
 import { PLAYER_NAMES } from './data/constants.js';
+import { recordGameStart } from './utils/gameSessions.js';
 
 export default function ChessApp({
   onBack,
@@ -18,23 +19,36 @@ export default function ChessApp({
 }) {
   const [screen, setScreen] = useState('home');
   const [myself, setMyself] = useState(null);
-  const [whoAmI, setWhoAmI] = useState({ visible: false, onDone: null });
+  const [whoAmIVisible, setWhoAmIVisible] = useState(false);
+  const [whoAmISubtitle, setWhoAmISubtitle] = useState(null);
+  const whoAmIDoneRef = useRef(null);
+
+  const openWhoAmI = useCallback((onDone, subtitle) => {
+    whoAmIDoneRef.current = onDone;
+    setWhoAmISubtitle(subtitle);
+    setWhoAmIVisible(true);
+  }, []);
+
+  const handoffToPlayer = useCallback(
+    (player) => {
+      setMyself(player);
+      onSetOnline(player);
+    },
+    [onSetOnline],
+  );
 
   const startGame = useCallback(() => {
-    setWhoAmI({
-      visible: true,
-      onDone: (selected) => {
-        setMyself(selected);
-        onSetOnline(selected);
-        addChatMsg(
-          'system',
-          null,
-          `♟️ Partida iniciada! ${PLAYER_NAMES[selected]} está com o dispositivo.`,
-        );
-        setScreen('game');
-      },
-    });
-  }, [addChatMsg, onSetOnline]);
+    openWhoAmI((selected) => {
+      handoffToPlayer(selected);
+      recordGameStart(selected, 'chess');
+      addChatMsg(
+        'system',
+        null,
+        `♟️ Partida iniciada! ${PLAYER_NAMES[selected]} está com o dispositivo.`,
+      );
+      setScreen('game');
+    }, 'Identifique-se para jogar xadrez');
+  }, [addChatMsg, handoffToPlayer, openWhoAmI]);
 
   const goHome = useCallback(() => {
     setScreen('home');
@@ -43,24 +57,29 @@ export default function ChessApp({
   }, [onSetOnline]);
 
   const switchPlayer = useCallback(() => {
-    setWhoAmI({
-      visible: true,
-      onDone: (selected) => {
-        setMyself(selected);
-        onSetOnline(selected);
-        addChatMsg('system', null, `👤 ${PLAYER_NAMES[selected]} ficou online.`);
-      },
-    });
-  }, [addChatMsg, onSetOnline]);
+    openWhoAmI((selected) => {
+      handoffToPlayer(selected);
+      addChatMsg('system', null, `👤 ${PLAYER_NAMES[selected]} ficou online.`);
+    }, 'Quem está com o dispositivo agora?');
+  }, [addChatMsg, handoffToPlayer, openWhoAmI]);
+
+  const handleTurnHandoff = useCallback(
+    (player) => {
+      handoffToPlayer(player);
+    },
+    [handoffToPlayer],
+  );
 
   return (
     <div className="app chess-app">
       <WhoAmI
-        visible={whoAmI.visible}
-        subtitle="Identifique-se para jogar xadrez"
+        visible={whoAmIVisible}
+        subtitle={whoAmISubtitle}
         onSelect={(p) => {
-          setWhoAmI({ visible: false, onDone: null });
-          whoAmI.onDone?.(p);
+          setWhoAmIVisible(false);
+          setWhoAmISubtitle(null);
+          whoAmIDoneRef.current?.(p);
+          whoAmIDoneRef.current = null;
         }}
       />
 
@@ -78,6 +97,7 @@ export default function ChessApp({
           onlinePlayer={onlinePlayer}
           onGoHome={goHome}
           onSwitchPlayer={switchPlayer}
+          onTurnHandoff={handleTurnHandoff}
           onSystemMessage={(text) => addChatMsg('system', null, text)}
           showToast={showToast}
         />

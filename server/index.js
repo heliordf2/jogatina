@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeDb, initDb } from './db.js';
+import { listGameSessions, recordGameStart } from './sessionsRepository.js';
 import { getGameStats, getSudokuScores, saveGameStats, saveSudokuScores } from './statsRepository.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,29 @@ app.put('/api/sudoku/scores', async (req, res) => {
     }
     await saveSudokuScores(req.body);
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/sessions', async (req, res) => {
+  try {
+    const { player, game, mode } = req.body ?? {};
+    if (!player || !game) {
+      res.status(400).json({ error: 'player e game são obrigatórios' });
+      return;
+    }
+    const session = await recordGameStart({ player, game, mode: mode ?? null });
+    res.status(201).json(session);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    res.json(await listGameSessions(limit));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

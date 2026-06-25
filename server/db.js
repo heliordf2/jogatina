@@ -48,6 +48,19 @@ export async function initDb() {
       draws INTEGER NOT NULL DEFAULT 0,
       games INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS game_sessions (
+      id SERIAL PRIMARY KEY,
+      player_id TEXT NOT NULL REFERENCES players(id),
+      game TEXT NOT NULL CHECK (game IN ('sudoku', 'chess')),
+      mode TEXT CHECK (mode IS NULL OR mode IN ('solo', 'collab')),
+      session_date DATE NOT NULL,
+      session_time TIME NOT NULL,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_game_sessions_started
+      ON game_sessions (started_at DESC);
   `);
 
   for (const playerId of PLAYERS) {

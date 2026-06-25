@@ -13,6 +13,7 @@ export function writePresence(player) {
   try {
     if (player) localStorage.setItem(STORAGE_KEY, player);
     else localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new CustomEvent('jogatina-presence', { detail: player }));
   } catch {
     // ignore
   }
