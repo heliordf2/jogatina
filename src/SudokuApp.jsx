@@ -28,6 +28,13 @@ import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sud
 
 const COLLAB_POLL_MS = 1500;
 
+/** Em modo livre (!turnLocked), qualquer jogador pode interagir com o tabuleiro. */
+function canCollabPlay(game, player) {
+  if (!game.isCollab) return true;
+  if (game.collabTurn === player) return true;
+  return !game.turnLocked;
+}
+
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -350,12 +357,8 @@ export default function SudokuApp({
       setGame((g) => {
         if (g.paused) return g;
         if (g.given[r][c] || isCellLocked(g, r, c)) return g;
-        if (g.isCollab && g.collabTurn !== onlinePlayer) {
-          if (g.turnLocked) {
-            showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
-            return g;
-          }
-          showToast(`É a vez de ${PLAYER_NAMES[g.collabTurn]}!`);
+        if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
+          showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
           return g;
         }
         return { ...g, selected: [r, c] };
@@ -374,12 +377,12 @@ export default function SudokuApp({
       }
       const [r, c] = g.selected;
       if (g.given[r][c] || isCellLocked(g, r, c)) return;
-      if (g.isCollab && g.collabTurn !== onlinePlayer) {
-        showToast('🔒 Não é sua vez!');
-        return;
-      }
 
       if (g.draftMode && n !== 0) {
+        if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
+          showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
+          return;
+        }
         setGame((current) => {
           if (current.board[r][c]) return current;
           const drafts = current.drafts.map((row) => row.map((set) => new Set(set)));
@@ -388,6 +391,11 @@ export default function SudokuApp({
           else draft.add(n);
           return { ...current, drafts };
         });
+        return;
+      }
+
+      if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
+        showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
         return;
       }
 
@@ -512,8 +520,8 @@ export default function SudokuApp({
       showToast('Sem dicas restantes!');
       return;
     }
-    if (g.isCollab && g.collabTurn !== onlinePlayer) {
-      showToast('🔒 Não é sua vez!');
+    if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
+      showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
       return;
     }
 
@@ -576,7 +584,7 @@ export default function SudokuApp({
         const r = (g.selected[0] + dr + 9) % 9;
         const c = (g.selected[1] + dc + 9) % 9;
         if (g.given[r][c]) return g;
-        if (g.isCollab && g.collabTurn !== onlinePlayer) return g;
+        if (g.isCollab && !canCollabPlay(g, onlinePlayer)) return g;
         return { ...g, selected: [r, c] };
       });
     },

@@ -279,7 +279,8 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
     const c = col;
     const n = value;
 
-    if (state.collabTurn !== player) {
+    const strictTurn = state.turnLocked;
+    if (strictTurn && state.collabTurn !== player) {
       throw new Error('Não é a sua vez');
     }
     if (state.given[r]?.[c] || isCellLocked(state, r, c)) {
@@ -307,23 +308,25 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
       next.collab_cells.thamy = next.collab_cells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
     } else {
       const correct = n === next.solution[r][c];
-      const turn = next.collabTurn;
+      const actor = strictTurn ? next.collabTurn : player;
       next.board[r][c] = n;
       next.collab_cells.helio = next.collab_cells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
       next.collab_cells.thamy = next.collab_cells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
-      next.collab_cells[turn] = [...next.collab_cells[turn], [r, c]];
+      next.collab_cells[actor] = [...next.collab_cells[actor], [r, c]];
 
       if (correct) {
-        next.collab_scores[turn] = next.collab_scores[turn] + 10;
+        next.collab_scores[actor] = next.collab_scores[actor] + 10;
         next.corrects += 1;
-        chatMessage = `${turn === 'helio' ? '🟣 Helio' : '🩷 Thamy'} acertou +10! ✅`;
+        chatMessage = `${actor === 'helio' ? '🟣 Helio' : '🩷 Thamy'} acertou +10! ✅`;
       } else {
-        next.collab_scores[turn] = Math.max(0, next.collab_scores[turn] - 5);
+        next.collab_scores[actor] = Math.max(0, next.collab_scores[actor] - 5);
         next.errors += 1;
-        chatMessage = `❌ ${turn === 'helio' ? 'Helio' : 'Thamy'} errou -5pts`;
+        chatMessage = `❌ ${actor === 'helio' ? 'Helio' : 'Thamy'} errou -5pts`;
       }
 
-      next.collabTurn = turn === 'helio' ? 'thamy' : 'helio';
+      if (strictTurn) {
+        next.collabTurn = actor === 'helio' ? 'thamy' : 'helio';
+      }
     }
 
     let status = 'playing';
@@ -417,7 +420,8 @@ export async function applySudokuCollabHint({ player }) {
     if (!dbRow) throw new Error('Nenhum duelo ativo');
 
     const state = rowToState(dbRow);
-    if (state.collabTurn !== player) {
+    const strictTurn = state.turnLocked;
+    if (strictTurn && state.collabTurn !== player) {
       throw new Error('Não é a sua vez');
     }
     if (state.hints <= 0) {
@@ -453,7 +457,9 @@ export async function applySudokuCollabHint({ player }) {
 
     next.board[r][c] = next.solution[r][c];
     next.collab_cells[player] = [...next.collab_cells[player], [r, c]];
-    next.collabTurn = player === 'helio' ? 'thamy' : 'helio';
+    if (strictTurn) {
+      next.collabTurn = player === 'helio' ? 'thamy' : 'helio';
+    }
 
     let status = 'playing';
     if (isBoardComplete(next.board, next.solution)) {

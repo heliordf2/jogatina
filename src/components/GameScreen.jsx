@@ -75,7 +75,11 @@ export default function GameScreen({
             <span>{PLAYER_NAMES[turn]}</span> — sua vez!
           </div>
           <div className="turn-right">
-            {turn === onlinePlayer ? 'Sua vez — jogue!' : `Aguardando ${PLAYER_NAMES[turn]}`}
+            {!game.turnLocked
+              ? 'Modo livre — ambos podem jogar!'
+              : turn === onlinePlayer
+                ? 'Sua vez — jogue!'
+                : `Aguardando ${PLAYER_NAMES[turn]}`}
           </div>
           {isMyTurn && (
             <button
