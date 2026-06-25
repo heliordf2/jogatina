@@ -163,6 +163,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .cell.highlight{background:var(--cell-highlight)}
 .cell.error{color:#E02424;font-weight:700}
 .cell.correct{color:#0057D9;font-weight:700}
+.cell.correct-h{color:#0057D9;font-weight:700}
+.cell.correct-t{color:#008A35;font-weight:700}
 .cell.locked{cursor:default}
 .cell.border-r{border-right:2.5px solid var(--text)}
 .cell.border-b{border-bottom:2.5px solid var(--text)}

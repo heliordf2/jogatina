@@ -21,7 +21,14 @@ function CollabDraftMarks({ helioDraft, thamyDraft }) {
 }
 
 export default function SudokuGrid({ game, onSelectCell }) {
-  const { board, solution, given, selected, isCollab, collabDrafts, drafts, paused } = game;
+  const { board, solution, given, selected, isCollab, collabCells, collabDrafts, drafts, paused } = game;
+
+  const cellOwner = (r, c) => {
+    if (!isCollab || !collabCells) return null;
+    if (collabCells.helio.some(([cr, cc]) => cr === r && cc === c)) return 'helio';
+    if (collabCells.thamy.some(([cr, cc]) => cr === r && cc === c)) return 'thamy';
+    return null;
+  };
 
   return (
     <div className={`sudoku-grid${paused ? ' paused' : ''}`}>
@@ -45,7 +52,14 @@ export default function SudokuGrid({ game, onSelectCell }) {
               content = v;
             } else if (v) {
               content = v;
-              classes.push(v === solution[r][c] ? 'correct' : 'error');
+              if (v === solution[r][c]) {
+                const owner = cellOwner(r, c);
+                if (owner === 'helio') classes.push('correct-h');
+                else if (owner === 'thamy') classes.push('correct-t');
+                else classes.push('correct');
+              } else {
+                classes.push('error');
+              }
             } else if (isCollab && collabDrafts) {
               const helioDraft = collabDrafts.helio[r][c];
               const thamyDraft = collabDrafts.thamy[r][c];
