@@ -1,0 +1,176 @@
+.chess-app {
+  max-width: 760px;
+}
+
+.chess-screen .board-layout {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.chess-screen .board-container {
+  flex: 1;
+  min-width: 0;
+  max-width: 560px;
+}
+
+.chess-screen .captured-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 64px;
+  padding: 10px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chess-screen .captured-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chess-screen .captured-sub {
+  font-size: 0.6rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 4px 0 10px;
+}
+
+.chess-screen .captured-pieces {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+}
+
+.chess-screen .captured-piece {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.chess-screen .captured-piece.piece-w {
+  color: #1a1d26;
+}
+
+.chess-screen .captured-piece.piece-b {
+  color: #374151;
+}
+
+.chess-screen .captured-empty {
+  color: var(--text3);
+  font-size: 1rem;
+}
+
+.chess-screen .captured-side.captured-black {
+  border-top: 3px solid #1a1d26;
+}
+
+.chess-screen .captured-side.captured-white {
+  border-top: 3px solid #d1d5db;
+}
+
+.chess-screen .game-result {
+  text-align: center;
+  padding: 1.25rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface1);
+}
+
+.chess-screen .game-result h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.chess-screen .game-result p {
+  color: var(--text2);
+  margin-bottom: 0.75rem;
+  font-size: 14px;
+}
+
+.chess-screen .game-result-win {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: #6ee7b7;
+}
+
+.chess-screen .game-result-win h2 {
+  color: #059669;
+}
+
+.chess-screen .game-result-loss {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+}
+
+.chess-screen .game-result-loss h2 {
+  color: #dc2626;
+}
+
+.chess-screen .game-result-draw {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-color: #cbd5e1;
+}
+
+.chess-screen .game-result-draw h2 {
+  color: #475569;
+}
+
+.chess-result-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.chess-result-actions .btn-primary {
+  width: auto;
+  margin-top: 0;
+  padding: 10px 18px;
+  font-size: 14px;
+}
+
+.chess-status-msg {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e24b4a;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .chess-screen .board-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .chess-screen .captured-side {
+    flex-direction: row;
+    width: 100%;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .chess-screen .captured-sub {
+    margin: 0;
+  }
+
+  .chess-screen .captured-pieces {
+    flex-direction: row;
+    flex: 1;
+    justify-content: flex-end;
+  }
+}

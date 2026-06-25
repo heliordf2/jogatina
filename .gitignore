@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+*.local
+_extract.*
+_body.html
+_script.js
+_style.css
+_imgs.json
