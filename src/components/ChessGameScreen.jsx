@@ -10,6 +10,8 @@ import {
   createOrJoinChessGame,
   fetchActiveChessGame,
   postChessMove,
+  postChessRematchRequest,
+  postChessRematchRespond,
   postChessResign,
 } from '../utils/api.js';
 import { isPlayerOnlineRemote } from '../hooks/useRemotePresence.js';
@@ -58,6 +60,13 @@ function isValidGame(game) {
   );
 }
 
+function getOpponent(game, player) {
+  if (!game || !player) return null;
+  if (player === game.whitePlayer) return game.blackPlayer;
+  if (player === game.blackPlayer) return game.whitePlayer;
+  return null;
+}
+
 function mapServerGame(game) {
   if (!isValidGame(game)) return null;
 
@@ -74,6 +83,7 @@ function mapServerGame(game) {
     whitePlayer: game.whitePlayer,
     blackPlayer: game.blackPlayer,
     version: game.version,
+    rematchRequestedBy: game.rematchRequestedBy ?? null,
   };
 }
 
@@ -124,6 +134,13 @@ export default function ChessGameScreen({
   });
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [moving, setMoving] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
+
+  const resetForNewGame = useCallback(() => {
+    announcedEndRef.current = false;
+    prevMovesCount.current = 0;
+    setSelectedSquare(null);
+  }, []);
 
   const applyServerGame = useCallback(
     (game) => {
@@ -133,6 +150,9 @@ export default function ChessGameScreen({
         setLoadError('Dados da partida inválidos no servidor');
         return false;
       }
+      if (gameStateRef.current?.id != null && gameStateRef.current.id !== mapped.id) {
+        resetForNewGame();
+      }
       chessRef.current = safeChess(Chess, mapped.fen) ?? new Chess(START_FEN);
       lastVersionRef.current = mapped.version;
       hadGameRef.current = true;
@@ -141,7 +161,33 @@ export default function ChessGameScreen({
       onGameUpdate?.(game);
       return true;
     },
-    [onGameUpdate],
+    [onGameUpdate, resetForNewGame],
+  );
+
+  const handleRematchResult = useCallback(
+    (result) => {
+      const { action, game } = result;
+      if (action === 'accepted') {
+        if (!applyServerGame(game)) return;
+        onSystemMessage?.(
+          `🎲 Nova partida online! ${PLAYER_NAMES[game.whitePlayer]} com as brancas, ${PLAYER_NAMES[game.blackPlayer]} com as pretas.`,
+        );
+        showToast('Nova partida iniciada!', 2000);
+        return;
+      }
+
+      applyServerGame(game);
+
+      if (action === 'requested' || action === 'pending') {
+        const opponent = getOpponent(game, myself);
+        onSystemMessage?.(`🔄 ${PLAYER_NAMES[myself]} pediu uma nova partida.`);
+        showToast(`Pedido enviado — aguardando ${PLAYER_NAMES[opponent]}`, 2500);
+      } else if (action === 'declined') {
+        onSystemMessage?.(`❌ ${PLAYER_NAMES[myself]} recusou a nova partida.`);
+        showToast('Pedido de nova partida recusado', 2000);
+      }
+    },
+    [applyServerGame, myself, onSystemMessage, showToast],
   );
 
   const announceTerminalState = useCallback(
@@ -228,7 +274,13 @@ export default function ChessGameScreen({
             setLoadError('Dados da partida inválidos no servidor');
             return;
           }
+          const isNewGame = gameStateRef.current?.id != null && gameStateRef.current.id !== mapped.id;
           applyServerGame(game);
+          if (isNewGame) {
+            onSystemMessage?.(
+              `🎲 Nova partida online! ${PLAYER_NAMES[game.whitePlayer]} com as brancas, ${PLAYER_NAMES[game.blackPlayer]} com as pretas.`,
+            );
+          }
           announceTerminalState(mapped);
         }
       } catch {
@@ -246,7 +298,7 @@ export default function ChessGameScreen({
       cancelled = true;
       clearInterval(id);
     };
-  }, [announceTerminalState, applyServerGame]);
+  }, [announceTerminalState, applyServerGame, onSystemMessage]);
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -425,22 +477,56 @@ export default function ChessGameScreen({
   }
 
   async function handleNewGame() {
-    if (!myself) return;
+    if (!myself || rematchBusy) return;
+    if (gameState?.rematchRequestedBy === myself) {
+      showToast('Aguardando aprovação do outro jogador');
+      return;
+    }
+
+    setRematchBusy(true);
     try {
-      const game = await createOrJoinChessGame({ player: myself, forceNew: true });
-      announcedEndRef.current = false;
-      prevMovesCount.current = 0;
-      if (!applyServerGame(game)) {
-        showToast('Não foi possível criar nova partida');
-        return;
-      }
-      onSystemMessage?.(
-        `🎲 Nova partida online! ${PLAYER_NAMES[game.whitePlayer]} com as brancas, ${PLAYER_NAMES[game.blackPlayer]} com as pretas.`,
-      );
+      const result = await postChessRematchRequest({ player: myself });
+      handleRematchResult(result);
     } catch (error) {
       showToast(error.message);
+    } finally {
+      setRematchBusy(false);
     }
   }
+
+  async function handleAcceptRematch() {
+    if (!myself || rematchBusy) return;
+    setRematchBusy(true);
+    try {
+      const result = await postChessRematchRespond({ player: myself, accept: true });
+      handleRematchResult(result);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setRematchBusy(false);
+    }
+  }
+
+  async function handleDeclineRematch() {
+    if (!myself || rematchBusy) return;
+    setRematchBusy(true);
+    try {
+      const result = await postChessRematchRespond({ player: myself, accept: false });
+      handleRematchResult(result);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setRematchBusy(false);
+    }
+  }
+
+  const rematchRequestedBy = gameState?.rematchRequestedBy ?? null;
+  const rematchOpponent = gameState ? getOpponent(gameState, myself) : null;
+  const waitingRematchApproval = rematchRequestedBy === myself;
+  const incomingRematchRequest =
+    rematchRequestedBy && rematchRequestedBy !== myself && rematchOpponent === rematchRequestedBy;
+  const newGameLabel = waitingRematchApproval ? '⏳ Aguardando...' : '🔄 Nova partida';
+  const rematchDisabled = moving || rematchBusy || waitingRematchApproval;
 
   const gameResult = useMemo(() => {
     if (!gameState || isPlayingStatus(gameState.status)) return null;
@@ -494,6 +580,33 @@ export default function ChessGameScreen({
         </p>
       )}
 
+      {incomingRematchRequest && (
+        <div className="chess-rematch-banner">
+          <p>
+            <strong>{PLAYER_NAMES[rematchRequestedBy]}</strong> quer jogar uma nova partida.
+          </p>
+          <div className="chess-rematch-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleAcceptRematch}
+              disabled={rematchBusy}
+            >
+              ✅ Aceitar
+            </button>
+            <button type="button" className="btn" onClick={handleDeclineRematch} disabled={rematchBusy}>
+              ❌ Recusar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {waitingRematchApproval && !incomingRematchRequest && (
+        <div className="chess-rematch-banner chess-rematch-waiting">
+          <p>Aguardando {PLAYER_NAMES[rematchOpponent]} aceitar a nova partida...</p>
+        </div>
+      )}
+
       <div className={`turn-banner turn-${activePlayer}`}>
         <div className="turn-left">
           <div className="avatar-sm">
@@ -524,8 +637,8 @@ export default function ChessGameScreen({
           <h2>{gameResult.title}</h2>
           <p>{gameResult.subtitle}</p>
           <div className="chess-result-actions">
-            <button type="button" className="btn btn-primary" onClick={handleNewGame}>
-              🔄 Nova partida
+            <button type="button" className="btn btn-primary" onClick={handleNewGame} disabled={rematchDisabled}>
+              {newGameLabel}
             </button>
             <button type="button" className="btn" onClick={onGoHome}>
               🏠 Voltar
@@ -592,8 +705,8 @@ export default function ChessGameScreen({
             🏳️ Desistir
           </button>
         )}
-        <button type="button" className="btn" onClick={handleNewGame} disabled={moving}>
-          🔄 Novo
+        <button type="button" className="btn" onClick={handleNewGame} disabled={rematchDisabled}>
+          {waitingRematchApproval ? '⏳ Aguardando...' : '🔄 Novo'}
         </button>
       </div>
 

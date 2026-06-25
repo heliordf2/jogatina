@@ -198,6 +198,27 @@ export function postChessResign({ player }) {
   });
 }
 
+function validateRematchResponse(result) {
+  if (!result?.game || !isValidChessGame(result.game)) {
+    throw new Error('Resposta inválida do servidor');
+  }
+  return result;
+}
+
+export function postChessRematchRequest({ player }) {
+  return request('/chess/game/rematch/request', {
+    method: 'POST',
+    body: JSON.stringify({ player }),
+  }).then(validateRematchResponse);
+}
+
+export function postChessRematchRespond({ player, accept }) {
+  return request('/chess/game/rematch/respond', {
+    method: 'POST',
+    body: JSON.stringify({ player, accept }),
+  }).then(validateRematchResponse);
+}
+
 export function fetchPresence() {
   return request('/presence');
 }

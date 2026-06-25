@@ -102,6 +102,9 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_chess_games_updated
       ON chess_games (updated_at DESC);
 
+    ALTER TABLE chess_games
+      ADD COLUMN IF NOT EXISTS rematch_requested_by TEXT REFERENCES players(id);
+
     CREATE TABLE IF NOT EXISTS sudoku_collab_games (
       id SERIAL PRIMARY KEY,
       difficulty TEXT NOT NULL,

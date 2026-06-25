@@ -77,6 +77,7 @@ export function formatChessGame(row) {
     version: row.version,
     createdBy: row.created_by,
     updatedAt: row.updated_at,
+    rematchRequestedBy: row.rematch_requested_by ?? null,
   };
 }
 

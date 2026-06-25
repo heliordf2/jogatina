@@ -71,17 +71,188 @@ async function getActiveGameRow(client = pool) {
 }
 
 export async function getActiveChessGame() {
-  const row = await getActiveGameRow();
-  if (!row) return null;
-  const game = formatChessGame(row);
-  if (!game) {
-    await pool.query(
-      `UPDATE chess_games SET status = 'abandoned', updated_at = NOW() WHERE id = $1`,
-      [row.id],
-    );
-    return null;
+  const activeRow = await getActiveGameRow();
+  if (activeRow) {
+    const game = formatChessGame(activeRow);
+    if (!game) {
+      await pool.query(
+        `UPDATE chess_games SET status = 'abandoned', updated_at = NOW() WHERE id = $1`,
+        [activeRow.id],
+      );
+      return null;
+    }
+    return game;
   }
+
+  const pending = await pool.query(`
+    SELECT *
+    FROM chess_games
+    WHERE rematch_requested_by IS NOT NULL
+      AND status IN ('checkmate', 'draw', 'resigned', 'playing', 'check')
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `);
+  const row = pending.rows[0];
+  if (!row) return null;
+  return formatChessGame(row);
+}
+
+async function getRematchableGameRow(client, player) {
+  const active = await getActiveGameRow(client);
+  if (active && (active.white_player === player || active.black_player === player)) {
+    return active;
+  }
+
+  const result = await client.query(
+    `
+      SELECT *
+      FROM chess_games
+      WHERE status IN ('checkmate', 'draw', 'resigned')
+        AND (white_player = $1 OR black_player = $1)
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    [player],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function insertNewChessGame(client, createdBy) {
+  const colors = rollChessColors();
+  const chess = new Chess();
+  const inserted = await client.query(
+    `
+      INSERT INTO chess_games (
+        fen, moves, white_player, black_player, status, created_by
+      )
+      VALUES ($1, $2::jsonb, $3, $4, 'playing', $5)
+      RETURNING *
+    `,
+    [chess.fen(), JSON.stringify([]), colors.whitePlayer, colors.blackPlayer, createdBy],
+  );
+  const game = formatChessGame(inserted.rows[0]);
+  if (!game) throw new Error('Falha ao criar partida');
   return game;
+}
+
+export async function requestChessRematch({ player }) {
+  assertValidPlayer(player);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const row = await getRematchableGameRow(client, player);
+    if (!row) {
+      throw new Error('Nenhuma partida para revanche');
+    }
+
+    if (row.rematch_requested_by === player) {
+      await client.query('COMMIT');
+      const game = formatChessGame(row);
+      if (!game) throw new Error('Estado da partida inválido');
+      return { action: 'pending', game };
+    }
+
+    if (row.rematch_requested_by && row.rematch_requested_by !== player) {
+      await client.query('ROLLBACK');
+      return respondChessRematch({ player, accept: true });
+    }
+
+    const updated = await client.query(
+      `
+        UPDATE chess_games
+        SET rematch_requested_by = $2, version = version + 1, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [row.id, player],
+    );
+
+    await client.query('COMMIT');
+    const game = formatChessGame(updated.rows[0]);
+    if (!game) throw new Error('Estado da partida inválido');
+    return { action: 'requested', game };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function respondChessRematch({ player, accept }) {
+  assertValidPlayer(player);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `
+        SELECT *
+        FROM chess_games
+        WHERE rematch_requested_by IS NOT NULL
+          AND (white_player = $1 OR black_player = $1)
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `,
+      [player],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error('Nenhum pedido de nova partida pendente');
+    }
+
+    if (row.rematch_requested_by === player) {
+      throw new Error('Aguarde a resposta do outro jogador');
+    }
+
+    if (!accept) {
+      const updated = await client.query(
+        `
+          UPDATE chess_games
+          SET rematch_requested_by = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [row.id],
+      );
+      await client.query('COMMIT');
+      const game = formatChessGame(updated.rows[0]);
+      if (!game) throw new Error('Estado da partida inválido');
+      return { action: 'declined', game };
+    }
+
+    if (['playing', 'check'].includes(row.status)) {
+      await client.query(
+        `
+          UPDATE chess_games
+          SET status = 'abandoned', rematch_requested_by = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1
+        `,
+        [row.id],
+      );
+    } else {
+      await client.query(
+        `
+          UPDATE chess_games
+          SET rematch_requested_by = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1
+        `,
+        [row.id],
+      );
+    }
+
+    const game = await insertNewChessGame(client, row.rematch_requested_by);
+    await client.query('COMMIT');
+    return { action: 'accepted', game };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getOrCreateChessGame({ player, forceNew = false }) {
