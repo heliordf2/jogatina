@@ -60,6 +60,26 @@ export function createEmptyDrafts() {
   );
 }
 
+export function createEmptyCollabDrafts() {
+  const row = () => Array.from({ length: 9 }, () => new Set());
+  return {
+    helio: Array.from({ length: 9 }, row),
+    thamy: Array.from({ length: 9 }, row),
+  };
+}
+
+export function collabDraftsFromServer(raw) {
+  const emptyRow = () => Array.from({ length: 9 }, () => []);
+  const empty = { helio: Array.from({ length: 9 }, emptyRow), thamy: Array.from({ length: 9 }, emptyRow) };
+  const base = raw ?? empty;
+  const toSets = (grid) =>
+    (grid ?? empty.helio).map((row) => row.map((nums) => new Set(nums)));
+  return {
+    helio: toSets(base.helio),
+    thamy: toSets(base.thamy),
+  };
+}
+
 export function createInitialGameState() {
   return {
     board: [],
@@ -73,6 +93,7 @@ export function createInitialGameState() {
     collabTurn: 'helio',
     collabScores: { helio: 0, thamy: 0 },
     collabCells: { helio: [], thamy: [] },
+    collabDrafts: createEmptyCollabDrafts(),
     isCollab: false,
     draftMode: false,
     drafts: createEmptyDrafts(),

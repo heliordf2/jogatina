@@ -279,6 +279,13 @@ export function postSudokuCollabCell({ player, row, col, value }) {
   });
 }
 
+export function postSudokuCollabDraft({ player, row, col, num }) {
+  return request('/sudoku/collab/game/draft', {
+    method: 'POST',
+    body: JSON.stringify({ player, row, col, num }),
+  });
+}
+
 export function postSudokuCollabTurnLock({ player, locked }) {
   return request('/sudoku/collab/game/turn-lock', {
     method: 'POST',

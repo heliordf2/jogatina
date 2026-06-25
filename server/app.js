@@ -17,6 +17,7 @@ import { listGameSessions, recordGameStart } from './sessionsRepository.js';
 import { getGameStats, getSudokuScores, saveGameStats, saveSudokuScores } from './statsRepository.js';
 import {
   applySudokuCollabCell,
+  applySudokuCollabDraft,
   applySudokuCollabHint,
   getActiveSudokuCollabGame,
   getOrCreateSudokuCollabGame,
@@ -155,6 +156,26 @@ function registerApiRoutes(router) {
           row: Number(row),
           col: Number(col),
           value: Number(value),
+        }),
+      );
+    } catch (error) {
+      res.status(400).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/collab/game/draft', async (req, res) => {
+    try {
+      const { player, row, col, num } = req.body ?? {};
+      if (!player || row == null || col == null || num == null) {
+        res.status(400).json({ error: 'player, row, col e num são obrigatórios' });
+        return;
+      }
+      res.json(
+        await applySudokuCollabDraft({
+          player,
+          row: Number(row),
+          col: Number(col),
+          num: Number(num),
         }),
       );
     } catch (error) {

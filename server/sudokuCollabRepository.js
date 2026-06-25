@@ -28,6 +28,53 @@ function computeTimer(row) {
   return row.timer_seconds + Math.floor((Date.now() - started) / 1000);
 }
 
+function emptyCollabDraftsData() {
+  const row = () => Array.from({ length: 9 }, () => []);
+  return {
+    helio: Array.from({ length: 9 }, row),
+    thamy: Array.from({ length: 9 }, row),
+  };
+}
+
+function parseCollabDrafts(value) {
+  const empty = emptyCollabDraftsData();
+  const raw = parseJson(value, empty);
+  return {
+    helio: (raw.helio ?? empty.helio).map((row) => row.map((nums) => [...nums])),
+    thamy: (raw.thamy ?? empty.thamy).map((row) => row.map((nums) => [...nums])),
+  };
+}
+
+function cloneCollabDrafts(drafts) {
+  return {
+    helio: drafts.helio.map((row) => row.map((nums) => [...nums])),
+    thamy: drafts.thamy.map((row) => row.map((nums) => [...nums])),
+  };
+}
+
+function clearCollabDraftAt(drafts, r, c) {
+  drafts.helio[r][c] = [];
+  drafts.thamy[r][c] = [];
+}
+
+function stateToDbPatch(state, extras = {}) {
+  return {
+    board: state.board,
+    collab_turn: extras.collab_turn ?? state.collabTurn,
+    collab_scores: state.collabScores,
+    collab_cells: state.collabCells,
+    collab_drafts: state.collabDrafts,
+    errors: state.errors,
+    corrects: state.corrects,
+    hints: state.hints,
+    turn_locked: extras.turn_locked ?? state.turnLocked,
+    paused: extras.paused ?? state.paused,
+    timer_seconds: extras.timer_seconds ?? state.timer_seconds ?? 0,
+    timer_started_at: extras.timer_started_at ?? state.timer_started_at ?? new Date(),
+    status: extras.status ?? state.status ?? 'playing',
+  };
+}
+
 function rowToState(row) {
   const board = parseJson(row.board, []);
   const solution = parseJson(row.solution, []);
@@ -39,6 +86,7 @@ function rowToState(row) {
     collabTurn: row.collab_turn,
     collabScores: parseJson(row.collab_scores, { helio: 0, thamy: 0 }),
     collabCells: parseJson(row.collab_cells, { helio: [], thamy: [] }),
+    collabDrafts: parseCollabDrafts(row.collab_drafts),
     errors: row.errors,
     corrects: row.corrects,
     hints: row.hints,
@@ -89,6 +137,7 @@ function createInitialRow({ difficulty, puzzle, solution, createdBy }) {
     collab_turn: 'helio',
     collab_scores: { helio: 0, thamy: 0 },
     collab_cells: { helio: [], thamy: [] },
+    collab_drafts: emptyCollabDraftsData(),
     errors: 0,
     corrects: 0,
     hints: 3,
@@ -134,15 +183,15 @@ export async function getOrCreateSudokuCollabGame({ player, difficulty, forceNew
       `
         INSERT INTO sudoku_collab_games (
           difficulty, puzzle, solution, board, given,
-          collab_turn, collab_scores, collab_cells,
+          collab_turn, collab_scores, collab_cells, collab_drafts,
           errors, corrects, hints, turn_locked, paused,
           timer_seconds, status, created_by
         )
         VALUES (
           $1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb,
-          $6, $7::jsonb, $8::jsonb,
-          $9, $10, $11, $12, $13,
-          $14, $15, $16
+          $6, $7::jsonb, $8::jsonb, $9::jsonb,
+          $10, $11, $12, $13, $14,
+          $15, $16, $17
         )
         RETURNING *
       `,
@@ -155,6 +204,7 @@ export async function getOrCreateSudokuCollabGame({ player, difficulty, forceNew
         initial.collab_turn,
         JSON.stringify(initial.collab_scores),
         JSON.stringify(initial.collab_cells),
+        JSON.stringify(initial.collab_drafts),
         initial.errors,
         initial.corrects,
         initial.hints,
@@ -224,14 +274,15 @@ async function updateGameRow(client, row, patch) {
         collab_turn = $3,
         collab_scores = $4::jsonb,
         collab_cells = $5::jsonb,
-        errors = $6,
-        corrects = $7,
-        hints = $8,
-        turn_locked = $9,
-        paused = $10,
-        timer_seconds = $11,
-        timer_started_at = $12,
-        status = $13,
+        collab_drafts = $6::jsonb,
+        errors = $7,
+        corrects = $8,
+        hints = $9,
+        turn_locked = $10,
+        paused = $11,
+        timer_seconds = $12,
+        timer_started_at = $13,
+        status = $14,
         version = version + 1,
         updated_at = NOW()
       WHERE id = $1
@@ -243,6 +294,7 @@ async function updateGameRow(client, row, patch) {
       patch.collab_turn,
       JSON.stringify(patch.collab_scores),
       JSON.stringify(patch.collab_cells),
+      JSON.stringify(patch.collab_drafts),
       patch.errors,
       patch.corrects,
       patch.hints,
@@ -296,6 +348,7 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
         helio: [...state.collabCells.helio],
         thamy: [...state.collabCells.thamy],
       },
+      collabDrafts: cloneCollabDrafts(state.collabDrafts),
       ...timerPatch,
       turnLocked: false,
     };
@@ -306,6 +359,7 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
       next.board[r][c] = 0;
       next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
       next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
+      clearCollabDraftAt(next.collabDrafts, r, c);
     } else {
       const correct = n === next.solution[r][c];
       const actor = strictTurn ? next.collabTurn : player;
@@ -313,6 +367,7 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
       next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
       next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
       next.collabCells[actor] = [...next.collabCells[actor], [r, c]];
+      clearCollabDraftAt(next.collabDrafts, r, c);
 
       if (correct) {
         next.collabScores[actor] = next.collabScores[actor] + 10;
@@ -335,20 +390,15 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
       next.timer_seconds = computeTimer({ ...dbRow, ...timerPatch });
     }
 
-    const updated = await updateGameRow(client, dbRow, {
-      board: next.board,
-      collab_turn: next.collabTurn,
-      collab_scores: next.collabScores,
-      collab_cells: next.collabCells,
-      errors: next.errors,
-      corrects: next.corrects,
-      hints: next.hints,
-      turn_locked: next.turnLocked,
-      paused: next.paused,
-      timer_seconds: next.timer_seconds,
-      timer_started_at: next.timer_started_at,
-      status,
-    });
+    const updated = await updateGameRow(
+      client,
+      dbRow,
+      stateToDbPatch(next, {
+        status,
+        timer_seconds: next.timer_seconds,
+        timer_started_at: next.timer_started_at,
+      }),
+    );
 
     if (status === 'won') {
       await recordCollabWinStats(client, updated, {
@@ -382,20 +432,16 @@ export async function toggleSudokuCollabTurnLock({ player, locked }) {
     }
 
     const timerPatch = syncTimerBeforeMutation(dbRow);
-    const updated = await updateGameRow(client, dbRow, {
-      board: state.board,
-      collab_turn: state.collabTurn,
-      collab_scores: state.collabScores,
-      collab_cells: state.collabCells,
-      errors: state.errors,
-      corrects: state.corrects,
-      hints: state.hints,
-      turn_locked: Boolean(locked),
-      paused: state.paused,
-      timer_seconds: timerPatch.timer_seconds,
-      timer_started_at: timerPatch.timer_started_at,
-      status: dbRow.status,
-    });
+    const updated = await updateGameRow(
+      client,
+      dbRow,
+      stateToDbPatch(state, {
+        turn_locked: Boolean(locked),
+        timer_seconds: timerPatch.timer_seconds,
+        timer_started_at: timerPatch.timer_started_at,
+        status: dbRow.status,
+      }),
+    );
 
     await client.query('COMMIT');
     const name = player === 'helio' ? 'Helio' : 'Thamy';
@@ -449,6 +495,7 @@ export async function applySudokuCollabHint({ player }) {
         helio: [...state.collabCells.helio],
         thamy: [...state.collabCells.thamy],
       },
+      collabDrafts: cloneCollabDrafts(state.collabDrafts),
       ...timerPatch,
       hints: state.hints - 1,
       corrects: state.corrects + 1,
@@ -457,6 +504,7 @@ export async function applySudokuCollabHint({ player }) {
 
     next.board[r][c] = next.solution[r][c];
     next.collabCells[player] = [...next.collabCells[player], [r, c]];
+    clearCollabDraftAt(next.collabDrafts, r, c);
     if (strictTurn) {
       next.collabTurn = player === 'helio' ? 'thamy' : 'helio';
     }
@@ -467,20 +515,15 @@ export async function applySudokuCollabHint({ player }) {
       next.timer_seconds = computeTimer({ ...dbRow, ...timerPatch });
     }
 
-    const updated = await updateGameRow(client, dbRow, {
-      board: next.board,
-      collab_turn: next.collabTurn,
-      collab_scores: next.collabScores,
-      collab_cells: next.collabCells,
-      errors: next.errors,
-      corrects: next.corrects,
-      hints: next.hints,
-      turn_locked: next.turnLocked,
-      paused: next.paused,
-      timer_seconds: next.timer_seconds,
-      timer_started_at: next.timer_started_at,
-      status,
-    });
+    const updated = await updateGameRow(
+      client,
+      dbRow,
+      stateToDbPatch(next, {
+        status,
+        timer_seconds: next.timer_seconds,
+        timer_started_at: next.timer_started_at,
+      }),
+    );
 
     if (status === 'won') {
       await recordCollabWinStats(client, updated, {
@@ -494,6 +537,71 @@ export async function applySudokuCollabHint({ player }) {
       game: formatSudokuCollabGame(updated),
       chatMessage: `💡 ${name} usou uma dica!`,
     };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function applySudokuCollabDraft({ player, row: rowIndex, col, num }) {
+  assertValidPlayer(player);
+
+  if (num < 1 || num > 9) {
+    throw new Error('Número inválido');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const dbRow = await getActiveGameRow(client);
+    if (!dbRow) throw new Error('Nenhum duelo ativo');
+
+    const state = rowToState(dbRow);
+    const r = rowIndex;
+    const c = col;
+
+    const strictTurn = state.turnLocked;
+    if (strictTurn && state.collabTurn !== player) {
+      throw new Error('Não é a sua vez');
+    }
+    if (state.given[r]?.[c] || state.board[r]?.[c] !== 0) {
+      throw new Error('Célula indisponível para rascunho');
+    }
+    if (isCellLocked(state, r, c)) {
+      throw new Error('Célula bloqueada');
+    }
+
+    const timerPatch = syncTimerBeforeMutation(dbRow);
+    const collabDrafts = cloneCollabDrafts(state.collabDrafts);
+    const cell = collabDrafts[player][r][c];
+    const idx = cell.indexOf(num);
+    if (idx >= 0) cell.splice(idx, 1);
+    else {
+      cell.push(num);
+      cell.sort((a, b) => a - b);
+    }
+
+    const next = {
+      ...state,
+      collabDrafts,
+      ...timerPatch,
+    };
+
+    const updated = await updateGameRow(
+      client,
+      dbRow,
+      stateToDbPatch(next, {
+        timer_seconds: timerPatch.timer_seconds,
+        timer_started_at: timerPatch.timer_started_at,
+        status: dbRow.status,
+      }),
+    );
+
+    await client.query('COMMIT');
+    return { game: formatSudokuCollabGame(updated) };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -523,20 +631,16 @@ export async function toggleSudokuCollabPause({ player, paused }) {
       timerStartedAt = now;
     }
 
-    const updated = await updateGameRow(client, dbRow, {
-      board: state.board,
-      collab_turn: state.collabTurn,
-      collab_scores: state.collabScores,
-      collab_cells: state.collabCells,
-      errors: state.errors,
-      corrects: state.corrects,
-      hints: state.hints,
-      turn_locked: state.turnLocked,
-      paused: Boolean(paused),
-      timer_seconds: timerSeconds,
-      timer_started_at: timerStartedAt,
-      status: dbRow.status,
-    });
+    const updated = await updateGameRow(
+      client,
+      dbRow,
+      stateToDbPatch(state, {
+        paused: Boolean(paused),
+        timer_seconds: timerSeconds,
+        timer_started_at: timerStartedAt,
+        status: dbRow.status,
+      }),
+    );
 
     await client.query('COMMIT');
     return { game: formatSudokuCollabGame(updated) };

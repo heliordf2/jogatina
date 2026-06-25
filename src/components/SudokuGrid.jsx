@@ -1,7 +1,27 @@
 import { getBoxNums, isCellLocked } from '../utils/sudoku.js';
 
+function CollabDraftMarks({ helioDraft, thamyDraft }) {
+  return (
+    <div className="cell-draft">
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
+        const h = helioDraft.has(n);
+        const t = thamyDraft.has(n);
+        if (!h && !t) return <span key={n} />;
+        const classes = ['on'];
+        if (h) classes.push('draft-h');
+        if (t) classes.push('draft-t');
+        return (
+          <span key={n} className={classes.join(' ')}>
+            {n}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SudokuGrid({ game, onSelectCell }) {
-  const { board, solution, given, selected, isCollab, collabCells, drafts, paused } = game;
+  const { board, solution, given, selected, isCollab, collabDrafts, drafts, paused } = game;
 
   return (
     <div className={`sudoku-grid${paused ? ' paused' : ''}`}>
@@ -25,16 +45,14 @@ export default function SudokuGrid({ game, onSelectCell }) {
               content = v;
             } else if (v) {
               content = v;
-              if (isCollab) {
-                if (collabCells.helio.some(([cr, cc]) => cr === r && cc === c)) {
-                  classes.push('collab-h');
-                } else if (collabCells.thamy.some(([cr, cc]) => cr === r && cc === c)) {
-                  classes.push('collab-t');
-                } else {
-                  classes.push(v === solution[r][c] ? 'correct' : 'error');
-                }
-              } else {
-                classes.push(v === solution[r][c] ? 'correct' : 'error');
+              classes.push(v === solution[r][c] ? 'correct' : 'error');
+            } else if (isCollab && collabDrafts) {
+              const helioDraft = collabDrafts.helio[r][c];
+              const thamyDraft = collabDrafts.thamy[r][c];
+              if (helioDraft.size > 0 || thamyDraft.size > 0) {
+                content = (
+                  <CollabDraftMarks helioDraft={helioDraft} thamyDraft={thamyDraft} />
+                );
               }
             } else {
               const draft = drafts[r][c];

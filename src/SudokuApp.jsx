@@ -6,7 +6,9 @@ import RankingScreen from './components/RankingScreen.jsx';
 import SharedChat from './components/SharedChat.jsx';
 import WinScreen from './components/WinScreen.jsx';
 import {
+  collabDraftsFromServer,
   createEmptyDrafts,
+  createEmptyCollabDrafts,
   createInitialGameState,
   DIFF_MULT,
   DIFF_NAMES,
@@ -17,6 +19,7 @@ import {
   createOrJoinSudokuCollabGame,
   fetchActiveSudokuCollabGame,
   postSudokuCollabCell,
+  postSudokuCollabDraft,
   postSudokuCollabHint,
   postSudokuCollabPause,
   postSudokuCollabTurnLock,
@@ -72,6 +75,7 @@ function serverGameToLocal(serverGame, prev) {
     collabTurn: serverGame.collabTurn,
     collabScores: serverGame.collabScores,
     collabCells: serverGame.collabCells,
+    collabDrafts: collabDraftsFromServer(serverGame.collabDrafts),
     isCollab: true,
     draftMode: prev?.draftMode ?? false,
     drafts: prev?.drafts ?? createEmptyDrafts(),
@@ -198,6 +202,7 @@ export default function SudokuApp({
       collabTurn: 'helio',
       collabScores: { helio: 0, thamy: 0 },
       collabCells: { helio: [], thamy: [] },
+      collabDrafts: createEmptyCollabDrafts(),
       isCollab: false,
       draftMode: false,
       drafts: createEmptyDrafts(),
@@ -383,6 +388,23 @@ export default function SudokuApp({
           showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
           return;
         }
+        if (g.board[r][c]) return;
+
+        if (g.isCollab) {
+          try {
+            const { game: serverGame } = await postSudokuCollabDraft({
+              player: onlinePlayer,
+              row: r,
+              col: c,
+              num: n,
+            });
+            applyServerCollabGame(serverGame);
+          } catch (error) {
+            showToast(error.message);
+          }
+          return;
+        }
+
         setGame((current) => {
           if (current.board[r][c]) return current;
           const drafts = current.drafts.map((row) => row.map((set) => new Set(set)));
