@@ -31,7 +31,7 @@ import { syncSudokuStats } from './utils/gameStats.js';
 import { recordGameStart } from './utils/gameSessions.js';
 import { loadScores, saveScores } from './utils/scores.js';
 import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sudoku.js';
-import { createGivenFromPuzzle } from '../../shared/sudokuGenerate.js';
+import { createGivenFromPuzzle } from '../shared/sudokuGenerate.js';
 
 const COLLAB_POLL_MS = 1500;
 
