@@ -7,9 +7,11 @@ const { Pool } = pg;
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('localhost')
-    ? false
-    : { rejectUnauthorized: false },
+  ssl:
+    process.env.DATABASE_URL?.includes('localhost') ||
+    process.env.DATABASE_URL?.includes('127.0.0.1')
+      ? false
+      : { rejectUnauthorized: false },
   max: process.env.VERCEL ? 1 : 10,
 });
 

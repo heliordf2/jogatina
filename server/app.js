@@ -30,6 +30,16 @@ export function createApp({ serveStatic = false } = {}) {
 
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
+
+  if (process.env.VERCEL) {
+    app.use((req, _res, next) => {
+      if (!req.url.startsWith('/api')) {
+        req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+      }
+      next();
+    });
+  }
+
   app.use(async (_req, _res, next) => {
     try {
       await ensureDb();

@@ -100,7 +100,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    checkApiHealth()
+    checkApiHealth({
+      retries: import.meta.env.PROD ? 4 : 1,
+      delayMs: import.meta.env.PROD ? 1500 : 0,
+    })
       .then((health) => {
         if (!health?.features?.includes('chat')) {
           showToast(
@@ -116,8 +119,8 @@ export default function App() {
           ? 'API offline — rode npm run dev'
           : error?.message?.includes('DATABASE') || error?.message?.includes('banco')
             ? 'Erro ao conectar ao banco de dados'
-            : 'Servidor indisponível — tente recarregar em instantes';
-        showToast(message, 4000);
+            : `Servidor indisponível${error?.message ? ` (${error.message})` : ''}`;
+        showToast(message, 5000);
       });
   }, [showToast]);
 

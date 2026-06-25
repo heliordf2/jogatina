@@ -1,4 +1,18 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+function resolveApiBase() {
+  const configured = import.meta.env.VITE_API_URL?.trim();
+  if (!configured) return '/api';
+
+  if (
+    import.meta.env.PROD &&
+    /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(configured)
+  ) {
+    return '/api';
+  }
+
+  return configured.replace(/\/$/, '');
+}
+
+const API_BASE = resolveApiBase();
 
 function devOnlyHint(devText, prodText) {
   return import.meta.env.DEV ? devText : prodText;
@@ -32,15 +46,28 @@ async function request(path, options = {}) {
   return body;
 }
 
-export async function checkApiHealth() {
-  const response = await fetch(`${API_BASE}/health`, {
-    headers: { 'Content-Type': 'application/json' },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body.error || `Erro na API (${response.status})`);
+export async function checkApiHealth({ retries = 1, delayMs = 0 } = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      const response = await fetch(`${API_BASE}/health`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || `Erro na API (${response.status})`);
+      }
+      return body;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
   }
-  return body;
+
+  throw lastError;
 }
 
 export function fetchGameStats() {
