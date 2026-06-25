@@ -228,6 +228,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* ===== GAME STATS (HOME) ===== */
 .stats-panel{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface)}
 .stats-header{background:var(--surface1);border-bottom:1px solid var(--border);padding:.6rem 1rem;font-size:13px;font-weight:600}
+.stats-loading,.stats-error{padding:.75rem 1rem;font-size:12px;color:var(--text2)}
+.stats-error{color:#A32D2D;background:#FCEBEB}
 .stats-game-block{padding:.75rem 1rem;border-bottom:1px solid var(--border)}
 .stats-game-block:last-child{border-bottom:none}
 .stats-game-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.03em}

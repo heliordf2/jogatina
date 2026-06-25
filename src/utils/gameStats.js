@@ -1,5 +1,5 @@
 import defaultStats from '../data/gameStats.json';
-import { loadScores } from './scores.js';
+import { fetchGameStats, saveGameStatsApi } from './api.js';
 
 const STORAGE_KEY = 'jogatina_game_stats';
 
@@ -32,61 +32,79 @@ function sudokuPlayerFromScores(playerScores) {
   };
 }
 
-function migrateSudokuFromScores(stats) {
-  const scores = loadScores();
-  stats.sudoku.helio = sudokuPlayerFromScores(scores.helio);
-  stats.sudoku.thamy = sudokuPlayerFromScores(scores.thamy);
-  return stats;
+function isStatsEmpty(stats) {
+  return (
+    stats.sudoku.helio.games === 0 &&
+    stats.sudoku.thamy.games === 0 &&
+    stats.chess.helio.games === 0 &&
+    stats.chess.thamy.games === 0
+  );
 }
 
-function needsSudokuHistoryMigration(stats) {
-  for (const player of ['helio', 'thamy']) {
-    const history = stats.sudoku[player]?.history;
-    if (!Array.isArray(history) || history.length === 0) {
-      const scores = loadScores();
-      if (scores[player]?.history?.length > 0) return true;
-    }
-  }
-  return false;
-}
-
-export function loadGameStats() {
+function loadStatsFromLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const migrated = migrateSudokuFromScores(cloneDefault());
-      saveGameStats(migrated);
-      return migrated;
-    }
-    const stats = mergeWithDefault(JSON.parse(raw));
-    if (needsSudokuHistoryMigration(stats)) {
-      const migrated = migrateSudokuFromScores(stats);
-      saveGameStats(migrated);
-      return migrated;
-    }
-    return stats;
+    if (!raw) return null;
+    return mergeWithDefault(JSON.parse(raw));
   } catch {
-    return cloneDefault();
+    return null;
   }
 }
 
-export function saveGameStats(stats) {
+function clearStatsLocalStorage() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function saveStatsToLocalStorage(stats) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stats, null, 2));
   } catch {
-    // ignore storage errors
+    // ignore
   }
 }
 
-export function syncSudokuStats(scores) {
-  const stats = loadGameStats();
-  stats.sudoku.helio = sudokuPlayerFromScores(scores.helio);
-  stats.sudoku.thamy = sudokuPlayerFromScores(scores.thamy);
-  saveGameStats(stats);
+export async function loadGameStats() {
+  try {
+    const remote = mergeWithDefault(await fetchGameStats());
+
+    if (isStatsEmpty(remote)) {
+      const local = loadStatsFromLocalStorage();
+      if (local && !isStatsEmpty(local)) {
+        await saveGameStatsApi(local);
+        clearStatsLocalStorage();
+        return local;
+      }
+    }
+
+    return remote;
+  } catch {
+    const local = loadStatsFromLocalStorage();
+    return local ?? cloneDefault();
+  }
 }
 
-export function recordChessResult(winner) {
-  const stats = loadGameStats();
+export async function saveGameStats(stats) {
+  try {
+    await saveGameStatsApi(stats);
+    clearStatsLocalStorage();
+  } catch {
+    saveStatsToLocalStorage(stats);
+  }
+}
+
+export async function syncSudokuStats(scores) {
+  const stats = await loadGameStats();
+  stats.sudoku.helio = sudokuPlayerFromScores(scores.helio);
+  stats.sudoku.thamy = sudokuPlayerFromScores(scores.thamy);
+  await saveGameStats(stats);
+}
+
+export async function recordChessResult(winner) {
+  const stats = await loadGameStats();
 
   if (winner === 'draw') {
     stats.chess.helio.draws += 1;
@@ -101,5 +119,5 @@ export function recordChessResult(winner) {
     stats.chess[loser].games += 1;
   }
 
-  saveGameStats(stats);
+  await saveGameStats(stats);
 }

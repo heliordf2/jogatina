@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import IMGS from '../assets/imgs.js';
 import { DIFF_NAMES, PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
+import defaultStats from '../data/gameStats.json';
 import { loadGameStats } from '../utils/gameStats.js';
 
 function SudokuHistory({ history, color }) {
@@ -75,11 +77,41 @@ function ChessLine({ player, data }) {
 }
 
 export default function GameStatsPanel() {
-  const stats = loadGameStats();
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    loadGameStats()
+      .then((data) => {
+        if (active) setStats(data);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err.message);
+          setStats(structuredClone(defaultStats));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!stats) {
+    return (
+      <div className="stats-panel">
+        <div className="stats-header">📊 Estatísticas por jogo</div>
+        <div className="stats-loading">Carregando estatísticas...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="stats-panel">
       <div className="stats-header">📊 Estatísticas por jogo</div>
+      {error && <div className="stats-error">⚠️ {error} (exibindo cache local)</div>}
 
       <div className="stats-game-block">
         <div className="stats-game-title">🔢 Sudoku</div>

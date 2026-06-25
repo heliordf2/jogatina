@@ -4,12 +4,45 @@ App React com **Sudoku** e **Xadrez** para Helio e Thamy.
 
 ## Como rodar
 
+1. Copie `.env.example` para `.env` e configure `DATABASE_URL` (PostgreSQL / Neon).
+2. Instale e inicie:
+
 ```bash
 npm install
 npm run dev
 ```
 
-## Jogos
+Isso sobe a **API** (`http://localhost:3001`) e o **Vite** (`http://localhost:5173`) juntos.
+
+## Banco de dados
+
+As estatísticas (Sudoku + Xadrez) e o ranking do Sudoku são salvos no PostgreSQL via API:
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `GET/PUT /api/stats` | Estatísticas da home |
+| `GET/PUT /api/sudoku/scores` | Ranking detalhado do Sudoku |
+| `GET /api/health` | Verifica conexão com o banco |
+
+Tabelas criadas automaticamente no PostgreSQL:
+
+| Tabela | Descrição |
+|--------|-----------|
+| `players` | Jogadores (`helio`, `thamy`) |
+| `sudoku_player_stats` | Totais do Sudoku por jogador |
+| `sudoku_games` | Histórico de partidas do Sudoku |
+| `chess_player_stats` | Vitórias/derrotas/empates no Xadrez |
+
+Schema em `server/schema.sql`.
+
+## Scripts
+
+- `npm run dev` — API + frontend (desenvolvimento)
+- `npm run server` — só a API
+- `npm run client` — só o frontend
+- `npm run build` — build de produção
+- `npm run preview` — preview do build
+- `npm start` — API em produção
 
 ### Sudoku
 - Modo **Solo** e **Colaborativo** (duelo em turnos no mesmo dispositivo)

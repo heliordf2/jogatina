@@ -86,7 +86,7 @@ export default function ChessGameScreen({
     if (!['checkmate', 'draw'].includes(gameState.status)) return;
 
     recordedResultRef.current = true;
-    recordChessResult(gameState.winner);
+    recordChessResult(gameState.winner).catch(() => {});
   }, [gameState.winner, gameState.status]);
 
   useEffect(() => {

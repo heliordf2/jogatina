@@ -12,6 +12,7 @@ import {
   createInitialGameState,
   DIFF_MULT,
   DIFF_NAMES,
+  INITIAL_SCORES,
   PLAYER_NAMES,
 } from './data/constants.js';
 import { syncSudokuStats } from './utils/gameStats.js';
@@ -58,12 +59,16 @@ export default function SudokuApp({
   const [diff, setDiff] = useState('easy');
   const [player, setPlayer] = useState(null);
   const [myself, setMyself] = useState(null);
-  const [scores, setScores] = useState(loadScores);
+  const [scores, setScores] = useState(() => structuredClone(INITIAL_SCORES));
   const [game, setGame] = useState(createInitialGameState);
   const [winResult, setWinResult] = useState(null);
   const [whoAmI, setWhoAmI] = useState({ visible: false, onDone: null });
 
   const timerRef = useRef(null);
+
+  useEffect(() => {
+    loadScores().then(setScores);
+  }, []);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -187,8 +192,8 @@ export default function SudokuApp({
           next.thamy.history.unshift({ ...entry, pts: tt });
           if (next.helio.history.length > 20) next.helio.history.pop();
           if (next.thamy.history.length > 20) next.thamy.history.pop();
-          saveScores(next);
-          syncSudokuStats(next);
+          saveScores(next).catch(() => {});
+          syncSudokuStats(next).catch(() => {});
           return next;
         });
 
@@ -224,8 +229,8 @@ export default function SudokuApp({
             date: new Date().toLocaleDateString('pt-BR'),
           });
           if (p.history.length > 20) p.history.pop();
-          saveScores(next);
-          syncSudokuStats(next);
+          saveScores(next).catch(() => {});
+          syncSudokuStats(next).catch(() => {});
           return next;
         });
 
