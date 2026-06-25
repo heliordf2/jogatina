@@ -13,13 +13,7 @@ export default function SudokuGrid({ game, onSelectCell }) {
           if (given[r][c]) classes.push('given');
           else if (isCellLocked(game, r, c)) classes.push('locked');
           if (selected && selected[0] === r && selected[1] === c) classes.push('selected');
-          else if (
-            selected &&
-            (selected[0] === r ||
-              selected[1] === c ||
-              (Math.floor(selected[0] / 3) === Math.floor(r / 3) &&
-                Math.floor(selected[1] / 3) === Math.floor(c / 3)))
-          ) {
+          else if (selected && (selected[0] === r || selected[1] === c)) {
             classes.push('highlight');
           }
 

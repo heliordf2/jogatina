@@ -1,16 +1,18 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './App.css';
 import './chess.css';
 import ChessApp from './ChessApp.jsx';
 import GameStatsPanel from './components/GameStatsPanel.jsx';
 import MainPicker from './components/MainPicker.jsx';
 import SharedChat from './components/SharedChat.jsx';
+import ThemeToggle from './components/ThemeToggle.jsx';
 import Toast from './components/Toast.jsx';
 import WhoAmI from './components/WhoAmI.jsx';
 import SudokuApp from './SudokuApp.jsx';
 import { PLAYER_NAMES } from './data/constants.js';
 import { chatTime, loadChat, saveChat } from './utils/chat.js';
 import { readPresence, writePresence } from './utils/presence.js';
+import { applyTheme, readTheme, toggleTheme } from './utils/theme.js';
 
 export default function App() {
   const [game, setGame] = useState(null);
@@ -18,9 +20,18 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState(loadChat);
   const [toast, setToast] = useState({ message: '', visible: false });
   const [whoAmI, setWhoAmI] = useState({ visible: false, onDone: null });
+  const [theme, setTheme] = useState(readTheme);
 
   const toastTimerRef = useRef(null);
   const chatInputFocusedRef = useRef(false);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((current) => toggleTheme(current));
+  }, []);
 
   const showToast = useCallback((msg, dur = 2000) => {
     setToast({ message: msg, visible: true });
@@ -83,6 +94,7 @@ export default function App() {
 
   return (
     <>
+      <ThemeToggle theme={theme} onToggle={handleToggleTheme} />
       <Toast message={toast.message} visible={toast.visible} />
 
       <WhoAmI

@@ -17,7 +17,7 @@ import {
 } from './data/constants.js';
 import { syncSudokuStats } from './utils/gameStats.js';
 import { loadScores, saveScores } from './utils/scores.js';
-import { generateSudoku, isCellLocked } from './utils/sudoku.js';
+import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sudoku.js';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -323,6 +323,7 @@ export default function SudokuApp({
               [turn]: next.collabScores[turn] + 10,
             };
             next.corrects++;
+            removeDraftFromRegion(drafts, r, c, n);
             const msg = `${turn === 'helio' ? '🟣 Helio' : '🩷 Thamy'} acertou +10! ✅`;
             showToast(msg, 1500);
             addChatMsg('system', null, msg);
@@ -354,6 +355,7 @@ export default function SudokuApp({
         if (n === next.solution[r][c]) {
           next.board[r][c] = n;
           drafts[r][c].clear();
+          removeDraftFromRegion(drafts, r, c, n);
           next.corrects++;
           next.drafts = drafts;
           setTimeout(() => checkWin(next), 0);
@@ -420,6 +422,7 @@ export default function SudokuApp({
       };
       next.board[r][c] = next.solution[r][c];
       next.drafts[r][c].clear();
+      removeDraftFromRegion(next.drafts, r, c, next.solution[r][c]);
 
       if (next.isCollab) {
         next.collabCells = {
