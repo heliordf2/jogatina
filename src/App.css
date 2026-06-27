@@ -197,6 +197,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .ranking-sort-heading{font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap;flex-shrink:0}
 .ranking-sort-tabs{flex:1;min-width:0}
 .stats-game-block-sudoku .ranking-controls{margin-top:.25rem;margin-bottom:.75rem}
+.cell.border-r{border-right:2.5px solid var(--text)}
 .cell.border-b{border-bottom:2.5px solid var(--text)}
 .cell-draft{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;padding:1px}
 .cell-draft span{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:var(--text3);line-height:1}
