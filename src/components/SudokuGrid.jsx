@@ -49,7 +49,9 @@ export default function SudokuGrid({ game, onlinePlayer, activeNum, onSelectCell
             classes.push('highlight');
           }
 
-          if (!paused && highlightNum && v === highlightNum) {
+          const isWrongValue = !given[r][c] && v !== 0 && v !== solution[r][c];
+
+          if (!paused && highlightNum && v === highlightNum && !isWrongValue) {
             if (given[r][c]) classes.push('num-match-given');
             else if (onlinePlayer === 'helio') classes.push('num-match-h');
             else if (onlinePlayer === 'thamy') classes.push('num-match-t');
