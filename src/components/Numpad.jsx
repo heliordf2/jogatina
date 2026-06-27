@@ -1,11 +1,11 @@
-export default function Numpad({ disabledNums, onEnterNum, disabled = false }) {
+export default function Numpad({ disabledNums, activeNum, onEnterNum, disabled = false }) {
   return (
     <div className={`numpad${disabled ? ' numpad-disabled' : ''}`}>
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
         <button
           key={n}
           type="button"
-          className="num-btn"
+          className={`num-btn${activeNum === n ? ' active-num' : ''}`}
           disabled={disabled || disabledNums.has(n)}
           onClick={() => onEnterNum(n)}
         >

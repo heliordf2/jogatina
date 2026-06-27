@@ -289,10 +289,10 @@ async function recordCollabWinStats(client, dbRow, state) {
     );
     await client.query(
       `
-        INSERT INTO sudoku_games (player_id, pts, time_str, difficulty, game_type, played_date)
-        VALUES ($1, $2, $3, $4, 'collab', $5)
+        INSERT INTO sudoku_games (player_id, pts, time_str, difficulty, game_type, played_date, errors)
+        VALUES ($1, $2, $3, $4, 'collab', $5, $6)
       `,
-      [playerId, pts, timeStr, dbRow.difficulty, playedDate],
+      [playerId, pts, timeStr, dbRow.difficulty, playedDate, dbRow.errors ?? 0],
     );
   }
 

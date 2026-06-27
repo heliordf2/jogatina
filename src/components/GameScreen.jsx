@@ -27,6 +27,7 @@ export default function GameScreen({
   onlinePlayer,
   remotePresence,
   progress,
+  activeNum,
   onGoHome,
   onSelectCell,
   onEnterNum,
@@ -145,7 +146,12 @@ export default function GameScreen({
       )}
 
       <div className="board-wrap">
-        <SudokuGrid game={game} onSelectCell={onSelectCell} />
+        <SudokuGrid
+          game={game}
+          onlinePlayer={onlinePlayer}
+          activeNum={activeNum}
+          onSelectCell={onSelectCell}
+        />
         <div className={`board-paused-msg${game.paused ? ' show' : ''}`}>
           <div className="board-paused-inner">
             <div className="board-paused-icon">⏸</div>
@@ -173,7 +179,12 @@ export default function GameScreen({
         <span><strong>{progress.total}</strong> a resolver</span>
       </div>
 
-      <Numpad disabledNums={disabledNums} onEnterNum={onEnterNum} disabled={game.paused} />
+      <Numpad
+        disabledNums={disabledNums}
+        activeNum={activeNum}
+        onEnterNum={onEnterNum}
+        disabled={game.paused}
+      />
 
       <div className="actions">
         <button

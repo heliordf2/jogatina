@@ -57,6 +57,7 @@ export async function initDb() {
       difficulty VARCHAR(20) NOT NULL,
       game_type VARCHAR(10) NOT NULL CHECK (game_type IN ('solo', 'collab')),
       played_date VARCHAR(20) NOT NULL,
+      errors INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -141,6 +142,9 @@ export async function initDb() {
 
     ALTER TABLE sudoku_collab_games
       ADD COLUMN IF NOT EXISTS rematch_requested_by TEXT REFERENCES players(id);
+
+    ALTER TABLE sudoku_games
+      ADD COLUMN IF NOT EXISTS errors INTEGER NOT NULL DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS player_presence (
       player_id TEXT PRIMARY KEY REFERENCES players(id),
@@ -227,8 +231,8 @@ async function migrateFromLegacyJson() {
       for (const entry of player.history ?? []) {
         await pool.query(
           `
-            INSERT INTO sudoku_games (player_id, pts, time_str, difficulty, game_type, played_date)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO sudoku_games (player_id, pts, time_str, difficulty, game_type, played_date, errors)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
           `,
           [
             playerId,
@@ -237,6 +241,7 @@ async function migrateFromLegacyJson() {
             entry.diff ?? 'easy',
             entry.type ?? 'solo',
             entry.date ?? '',
+            entry.errors ?? 0,
           ],
         );
       }

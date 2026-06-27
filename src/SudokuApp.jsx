@@ -127,6 +127,7 @@ export default function SudokuApp({
   const [winResult, setWinResult] = useState(null);
   const [joiningCollab, setJoiningCollab] = useState(false);
   const [rematchBusy, setRematchBusy] = useState(false);
+  const [activeNum, setActiveNum] = useState(null);
 
   const timerRef = useRef(null);
   const gameRef = useRef(game);
@@ -230,6 +231,7 @@ export default function SudokuApp({
       turnLocked: false,
       paused: false,
     });
+    setActiveNum(null);
     setScreen('game');
     startTimer();
     recordGameStart(onlinePlayer, 'sudoku', 'solo');
@@ -264,6 +266,7 @@ export default function SudokuApp({
         lastVersionRef.current = serverGame.version;
         setGame(serverGameToLocal(serverGame, null));
         if (serverGame.difficulty) setDiff(serverGame.difficulty);
+        setActiveNum(null);
         setScreen('game');
         recordGameStart(onlinePlayer, 'sudoku', 'collab');
 
@@ -307,6 +310,7 @@ export default function SudokuApp({
 
   const goHome = useCallback(() => {
     stopTimer();
+    setActiveNum(null);
     setScreen('home');
     setWinResult(null);
     winHandledRef.current = null;
@@ -342,6 +346,7 @@ export default function SudokuApp({
           time: timeStr,
           type: 'solo',
           date: new Date().toLocaleDateString('pt-BR'),
+          errors: currentGame.errors,
         });
         if (p.history.length > 20) p.history.pop();
         saveScores(next).catch(() => {});
@@ -384,6 +389,7 @@ export default function SudokuApp({
           if (serverGame.status === 'playing' && isNewGame) {
             winHandledRef.current = null;
             setWinResult(null);
+            setActiveNum(null);
             setScreen('game');
             setGame(serverGameToLocal(serverGame, null));
             if (serverGame.difficulty) setDiff(serverGame.difficulty);
@@ -441,10 +447,14 @@ export default function SudokuApp({
     async (n) => {
       const g = gameRef.current;
       if (g.paused) return;
-      if (!g.selected) {
-        showToast('Selecione uma célula!');
-        return;
+
+      if (n >= 1 && n <= 9) {
+        setActiveNum((prev) => (prev === n ? null : n));
+      } else {
+        setActiveNum(null);
       }
+
+      if (!g.selected) return;
       const [r, c] = g.selected;
       if (g.given[r][c] || isCellLocked(g, r, c)) return;
 
@@ -668,6 +678,7 @@ export default function SudokuApp({
         setWinResult(null);
         setGame(serverGameToLocal(serverGame, null));
         if (serverGame.difficulty) setDiff(serverGame.difficulty);
+        setActiveNum(null);
         setScreen('game');
         recordGameStart(onlinePlayer, 'sudoku', 'collab');
         addChatMsg(
@@ -816,6 +827,7 @@ export default function SudokuApp({
           onlinePlayer={onlinePlayer}
           remotePresence={remotePresence}
           progress={progress}
+          activeNum={activeNum}
           onGoHome={goHome}
           onSelectCell={selectCell}
           onEnterNum={enterNum}

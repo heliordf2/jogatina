@@ -20,8 +20,9 @@ function CollabDraftMarks({ helioDraft, thamyDraft }) {
   );
 }
 
-export default function SudokuGrid({ game, onSelectCell }) {
-  const { board, solution, given, selected, isCollab, collabCells, collabDrafts, drafts, paused } = game;
+export default function SudokuGrid({ game, onlinePlayer, activeNum, onSelectCell }) {
+  const { board, solution, given, selected, isCollab, collabCells, collabDrafts, drafts, paused } =
+    game;
 
   const cellOwner = (r, c) => {
     if (!isCollab || !collabCells) return null;
@@ -29,6 +30,8 @@ export default function SudokuGrid({ game, onSelectCell }) {
     if (collabCells.thamy.some(([cr, cc]) => cr === r && cc === c)) return 'thamy';
     return null;
   };
+
+  const highlightNum = !paused && activeNum ? activeNum : null;
 
   return (
     <div className={`sudoku-grid${paused ? ' paused' : ''}`}>
@@ -44,6 +47,11 @@ export default function SudokuGrid({ game, onSelectCell }) {
           if (!paused && selected && selected[0] === r && selected[1] === c) classes.push('selected');
           else if (!paused && selected && (selected[0] === r || selected[1] === c)) {
             classes.push('highlight');
+          }
+
+          if (!paused && highlightNum && v === highlightNum) {
+            if (onlinePlayer === 'helio') classes.push('num-match-h');
+            else if (onlinePlayer === 'thamy') classes.push('num-match-t');
           }
 
           let content = null;

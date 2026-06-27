@@ -18,6 +18,7 @@ function mapSudokuGameRow(row) {
     diff: row.difficulty,
     type: row.game_type,
     date: row.played_date,
+    errors: row.errors ?? 0,
   };
 }
 
@@ -33,7 +34,7 @@ async function fetchSudokuPlayer(playerId) {
 
   const historyResult = await pool.query(
     `
-      SELECT pts, time_str, difficulty, game_type, played_date
+      SELECT pts, time_str, difficulty, game_type, played_date, errors
       FROM sudoku_games
       WHERE player_id = $1
       ORDER BY created_at DESC, id DESC
@@ -94,8 +95,8 @@ async function saveSudokuPlayer(client, playerId, playerData) {
   for (const entry of history) {
     await client.query(
       `
-        INSERT INTO sudoku_games (player_id, pts, time_str, difficulty, game_type, played_date)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO sudoku_games (player_id, pts, time_str, difficulty, game_type, played_date, errors)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `,
       [
         playerId,
@@ -104,6 +105,7 @@ async function saveSudokuPlayer(client, playerId, playerData) {
         entry.diff ?? 'easy',
         entry.type ?? 'solo',
         entry.date ?? '',
+        entry.errors ?? 0,
       ],
     );
   }

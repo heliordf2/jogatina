@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS sudoku_games (
   difficulty VARCHAR(20) NOT NULL,
   game_type VARCHAR(10) NOT NULL CHECK (game_type IN ('solo', 'collab')),
   played_date VARCHAR(20) NOT NULL,
+  errors INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

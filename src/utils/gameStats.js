@@ -28,6 +28,7 @@ function sudokuPlayerFromScores(playerScores) {
       diff: h.diff,
       type: h.type,
       date: h.date,
+      errors: h.errors ?? 0,
     })),
   };
 }

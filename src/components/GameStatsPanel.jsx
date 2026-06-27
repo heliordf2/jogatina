@@ -1,41 +1,15 @@
 import { useEffect, useState } from 'react';
 import IMGS from '../assets/imgs.js';
-import { DIFF_NAMES, PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
+import { PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
 import defaultStats from '../data/gameStats.json';
 import { loadGameStats } from '../utils/gameStats.js';
+import { aggregateSudokuHistory } from '../utils/sudokuRanking.js';
+import SudokuHistoryList from './SudokuHistoryList.jsx';
 
-function SudokuHistory({ history, color }) {
-  if (!history?.length) {
-    return <div className="stats-history-empty">Nenhuma partida registrada</div>;
-  }
-
-  return (
-    <div className="stats-history">
-      {history.slice(0, 5).map((h, idx) => {
-        const bc = `badge-${h.type === 'collab' ? 'collab' : h.diff}`;
-        return (
-          <div key={idx} className="stats-history-item">
-            <div>
-              <div className="stats-history-meta">
-                {h.date}{' '}
-                <span className={`badge ${bc}`}>
-                  {h.type === 'collab' ? 'Duelo' : DIFF_NAMES[h.diff]}
-                </span>
-              </div>
-              <div className="stats-history-time">⏱ {h.time}</div>
-            </div>
-            <div className="stats-history-pts" style={{ color }}>
-              +{h.pts} pts
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SudokuBlock({ player, data }) {
-  const best = data.best != null ? `${data.best} pts` : '—';
+function SudokuBlock({ player, data, typeFilter = null }) {
+  const stats = aggregateSudokuHistory(data.history, { type: typeFilter });
+  const best = stats.best != null ? `${stats.best} pts` : '—';
+  const label = typeFilter === 'collab' ? 'duelos' : 'jogos';
 
   return (
     <div className="stats-player-block">
@@ -48,11 +22,19 @@ function SudokuBlock({ player, data }) {
             {PLAYER_NAMES[player]}
           </div>
           <div className="stats-player-detail">
-            {data.total} pts · {data.games} jogo{data.games !== 1 ? 's' : ''} · Melhor: {best}
+            {stats.total} pts · {stats.games} {label} · Melhor: {best}
+            {stats.games > 0 && (
+              <> · ❌ {stats.errorsTotal} erro{stats.errorsTotal !== 1 ? 's' : ''}</>
+            )}
           </div>
         </div>
       </div>
-      <SudokuHistory history={data.history} color={PLAYER_COLORS[player]} />
+      <SudokuHistoryList
+        history={stats.history}
+        color={PLAYER_COLORS[player]}
+        limit={5}
+        emptyLabel="Nenhuma partida registrada"
+      />
     </div>
   );
 }
@@ -114,9 +96,15 @@ export default function GameStatsPanel() {
       {error && <div className="stats-error">⚠️ {error} (exibindo cache local)</div>}
 
       <div className="stats-game-block">
-        <div className="stats-game-title">🔢 Sudoku</div>
+        <div className="stats-game-title">🔢 Sudoku — geral</div>
         <SudokuBlock player="helio" data={stats.sudoku.helio} />
         <SudokuBlock player="thamy" data={stats.sudoku.thamy} />
+      </div>
+
+      <div className="stats-game-block">
+        <div className="stats-game-title">⚔️ Sudoku — duelo colaborativo</div>
+        <SudokuBlock player="helio" data={stats.sudoku.helio} typeFilter="collab" />
+        <SudokuBlock player="thamy" data={stats.sudoku.thamy} typeFilter="collab" />
       </div>
 
       <div className="stats-game-block">
