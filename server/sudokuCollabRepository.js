@@ -393,9 +393,21 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
     let chatMessage = null;
 
     if (n === 0) {
-      next.board[r][c] = 0;
-      next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
-      next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
+      const hasDrafts =
+        (state.collabDrafts?.helio?.[r]?.[c]?.length ?? 0) > 0 ||
+        (state.collabDrafts?.thamy?.[r]?.[c]?.length ?? 0) > 0;
+      const isWrong = state.board[r][c] !== 0 && state.board[r][c] !== state.solution[r][c];
+
+      if (!isWrong && !hasDrafts) {
+        await client.query('COMMIT');
+        return { game: formatSudokuCollabGame(dbRow), chatMessage: null };
+      }
+
+      if (isWrong) {
+        next.board[r][c] = 0;
+        next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
+        next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
+      }
       clearCollabDraftAt(next.collabDrafts, r, c);
     } else {
       const correct = n === next.solution[r][c];

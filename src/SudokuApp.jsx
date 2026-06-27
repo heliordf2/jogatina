@@ -30,7 +30,14 @@ import {
 import { syncSudokuStats } from './utils/gameStats.js';
 import { recordGameStart } from './utils/gameSessions.js';
 import { loadScores, saveScores } from './utils/scores.js';
-import { generateSudoku, isCellLocked, removeDraftFromRegion } from './utils/sudoku.js';
+import {
+  generateSudoku,
+  hasCollabDraftAt,
+  hasSoloDraftsAt,
+  isCellLocked,
+  isCellWrong,
+  removeDraftFromRegion,
+} from './utils/sudoku.js';
 import { createGivenFromPuzzle } from '../shared/sudokuGenerate.js';
 
 const COLLAB_POLL_MS = 1500;
@@ -448,22 +455,66 @@ export default function SudokuApp({
       const g = gameRef.current;
       if (g.paused) return;
 
-      if (n >= 1 && n <= 9) {
-        setActiveNum((prev) => (prev === n ? null : n));
-      } else {
-        setActiveNum(null);
-      }
+      const selected = g.selected;
+      const [r, c] = selected ?? [];
+      const cellEditable =
+        selected &&
+        !g.given[r][c] &&
+        !isCellLocked(g, r, c) &&
+        (!g.isCollab || canCollabPlay(g, onlinePlayer));
 
-      if (!g.selected) return;
-      const [r, c] = g.selected;
-      if (g.given[r][c] || isCellLocked(g, r, c)) return;
+      if (n === 0) {
+        if (!selected || g.given[r][c] || isCellLocked(g, r, c)) return;
 
-      if (g.draftMode && n !== 0) {
-        if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
-          showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
+        const hasDrafts = g.isCollab ? hasCollabDraftAt(g, r, c) : hasSoloDraftsAt(g, r, c);
+        const isWrong = isCellWrong(g, r, c);
+        if (!isWrong && !hasDrafts) return;
+
+        if (g.isCollab) {
+          if (!canCollabPlay(g, onlinePlayer)) {
+            showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
+            return;
+          }
+          try {
+            const { game: serverGame } = await postSudokuCollabCell({
+              player: onlinePlayer,
+              row: r,
+              col: c,
+              value: 0,
+            });
+            applyServerCollabGame(serverGame, { clearSelection: true });
+          } catch (error) {
+            showToast(error.message);
+          }
           return;
         }
-        if (g.board[r][c]) return;
+
+        setGame((current) => {
+          if (current.given[r][c] || isCellLocked(current, r, c)) return current;
+
+          const drafts = current.drafts.map((row) => row.map((set) => new Set(set)));
+
+          if (isCellWrong(current, r, c)) {
+            const next = {
+              ...current,
+              board: current.board.map((rowArr) => [...rowArr]),
+              drafts,
+            };
+            next.board[r][c] = 0;
+            next.drafts[r][c].clear();
+            return next;
+          }
+
+          drafts[r][c].clear();
+          return { ...current, drafts };
+        });
+        return;
+      }
+
+      const willToggleDraft = cellEditable && g.draftMode && !g.board[r][c];
+
+      if (willToggleDraft) {
+        setActiveNum(n);
 
         if (g.isCollab) {
           try {
@@ -491,69 +542,63 @@ export default function SudokuApp({
         return;
       }
 
-      if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
-        showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
-        return;
-      }
+      if (cellEditable && !g.draftMode) {
+        setActiveNum(n);
 
-      if (g.isCollab) {
-        try {
-          const { game: serverGame, chatMessage } = await postSudokuCollabCell({
-            player: onlinePlayer,
-            row: r,
-            col: c,
-            value: n,
-          });
-          const toastMessage =
-            n === 0
-              ? null
-              : chatMessage?.includes('acertou')
+        if (g.isCollab) {
+          try {
+            const { game: serverGame, chatMessage } = await postSudokuCollabCell({
+              player: onlinePlayer,
+              row: r,
+              col: c,
+              value: n,
+            });
+            const toastMessage =
+              chatMessage?.includes('acertou')
                 ? chatMessage
                 : chatMessage?.includes('errou')
                   ? chatMessage
                   : null;
-          applyServerCollabGame(serverGame, {
-            chatMessage,
-            toastMessage: toastMessage ?? undefined,
-            clearSelection: true,
-          });
-        } catch (error) {
-          showToast(error.message);
+            applyServerCollabGame(serverGame, {
+              chatMessage,
+              toastMessage: toastMessage ?? undefined,
+              clearSelection: true,
+            });
+          } catch (error) {
+            showToast(error.message);
+          }
+          return;
         }
+
+        setGame((current) => {
+          if (current.paused) return current;
+          if (!current.selected) return current;
+          const [row, col] = current.selected;
+          if (current.given[row][col] || isCellLocked(current, row, col)) return current;
+
+          const next = { ...current, board: current.board.map((rowArr) => [...rowArr]) };
+          const drafts = next.drafts.map((row) => row.map((set) => new Set(set)));
+
+          if (n === next.solution[row][col]) {
+            next.board[row][col] = n;
+            drafts[row][col].clear();
+            removeDraftFromRegion(drafts, row, col, n);
+            next.corrects++;
+            next.drafts = drafts;
+            setTimeout(() => checkWin(next), 0);
+            return next;
+          }
+
+          next.board[row][col] = n;
+          next.errors++;
+          next.drafts = drafts;
+          showToast('❌ Número incorreto!', 1500);
+          return next;
+        });
         return;
       }
 
-      setGame((current) => {
-        if (current.paused) return current;
-        if (!current.selected) return current;
-        const [row, col] = current.selected;
-        if (current.given[row][col] || isCellLocked(current, row, col)) return current;
-
-        const next = { ...current, board: current.board.map((rowArr) => [...rowArr]) };
-        const drafts = next.drafts.map((row) => row.map((set) => new Set(set)));
-
-        if (n === 0) {
-          next.board[row][col] = 0;
-          next.drafts = drafts;
-          return next;
-        }
-
-        if (n === next.solution[row][col]) {
-          next.board[row][col] = n;
-          drafts[row][col].clear();
-          removeDraftFromRegion(drafts, row, col, n);
-          next.corrects++;
-          next.drafts = drafts;
-          setTimeout(() => checkWin(next), 0);
-          return next;
-        }
-
-        next.board[row][col] = n;
-        next.errors++;
-        next.drafts = drafts;
-        showToast('❌ Número incorreto!', 1500);
-        return next;
-      });
+      setActiveNum((prev) => (prev === n ? null : n));
     },
     [applyServerCollabGame, checkWin, onlinePlayer, showToast],
   );

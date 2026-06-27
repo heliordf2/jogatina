@@ -50,7 +50,8 @@ export default function SudokuGrid({ game, onlinePlayer, activeNum, onSelectCell
           }
 
           if (!paused && highlightNum && v === highlightNum) {
-            if (onlinePlayer === 'helio') classes.push('num-match-h');
+            if (given[r][c]) classes.push('num-match-given');
+            else if (onlinePlayer === 'helio') classes.push('num-match-h');
             else if (onlinePlayer === 'thamy') classes.push('num-match-t');
           }
 

@@ -22,6 +22,22 @@ export function isCellLocked(game, r, c) {
   return isCellLockedCore(game, r, c);
 }
 
+export function isCellWrong(game, r, c) {
+  const value = game.board[r][c];
+  return value !== 0 && value !== game.solution[r][c];
+}
+
+export function hasSoloDraftsAt(game, r, c) {
+  return Boolean(game.drafts?.[r]?.[c]?.size);
+}
+
+export function hasCollabDraftAt(game, r, c) {
+  if (!game.collabDrafts) return false;
+  return (
+    game.collabDrafts.helio[r][c].size > 0 || game.collabDrafts.thamy[r][c].size > 0
+  );
+}
+
 export function removeDraftFromRegion(drafts, r, c, n) {
   for (let col = 0; col < 9; col += 1) {
     if (col !== c) drafts[r][col].delete(n);
