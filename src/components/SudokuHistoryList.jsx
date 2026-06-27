@@ -1,16 +1,24 @@
 import { DIFF_NAMES } from '../data/constants.js';
 
-export default function SudokuHistoryList({ history, color, limit = 5, emptyLabel = 'Nenhuma partida registrada' }) {
+export default function SudokuHistoryList({
+  history,
+  color,
+  sortBy = 'date',
+  limit = 5,
+  emptyLabel = 'Nenhuma partida registrada',
+}) {
   if (!history?.length) {
     return (
       <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>{emptyLabel}</p>
     );
   }
 
+  const listLabel = sortBy === 'pts' ? 'Melhores partidas:' : 'Partidas recentes:';
+
   return (
     <>
       <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6, fontWeight: 500 }}>
-        Últimas partidas:
+        {listLabel}
       </p>
       {history.slice(0, limit).map((h, idx) => {
         const bc = `badge-${h.type === 'collab' ? 'collab' : h.diff}`;

@@ -5,9 +5,10 @@ import defaultStats from '../data/gameStats.json';
 import { loadGameStats } from '../utils/gameStats.js';
 import { aggregateSudokuHistory } from '../utils/sudokuRanking.js';
 import SudokuHistoryList from './SudokuHistoryList.jsx';
+import SudokuRankingControls from './SudokuRankingControls.jsx';
 
-function SudokuBlock({ player, data, typeFilter = null }) {
-  const stats = aggregateSudokuHistory(data.history, { type: typeFilter });
+function SudokuBlock({ player, data, typeFilter = null, sortBy = 'pts' }) {
+  const stats = aggregateSudokuHistory(data.history, { type: typeFilter, sortBy });
   const best = stats.best != null ? `${stats.best} pts` : '—';
   const label = typeFilter === 'collab' ? 'duelos' : 'jogos';
 
@@ -32,8 +33,13 @@ function SudokuBlock({ player, data, typeFilter = null }) {
       <SudokuHistoryList
         history={stats.history}
         color={PLAYER_COLORS[player]}
+        sortBy={sortBy}
         limit={5}
-        emptyLabel="Nenhuma partida registrada"
+        emptyLabel={
+          typeFilter === 'collab'
+            ? 'Nenhum duelo colaborativo registrado'
+            : 'Nenhuma partida registrada'
+        }
       />
     </div>
   );
@@ -61,6 +67,9 @@ function ChessLine({ player, data }) {
 export default function GameStatsPanel() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
+  const [sudokuTab, setSudokuTab] = useState('all');
+  const [sortBy, setSortBy] = useState('pts');
+  const sudokuTypeFilter = sudokuTab === 'collab' ? 'collab' : null;
 
   useEffect(() => {
     let active = true;
@@ -95,16 +104,26 @@ export default function GameStatsPanel() {
       <div className="stats-header">📊 Estatísticas por jogo</div>
       {error && <div className="stats-error">⚠️ {error} (exibindo cache local)</div>}
 
-      <div className="stats-game-block">
-        <div className="stats-game-title">🔢 Sudoku — geral</div>
-        <SudokuBlock player="helio" data={stats.sudoku.helio} />
-        <SudokuBlock player="thamy" data={stats.sudoku.thamy} />
-      </div>
-
-      <div className="stats-game-block">
-        <div className="stats-game-title">⚔️ Sudoku — duelo colaborativo</div>
-        <SudokuBlock player="helio" data={stats.sudoku.helio} typeFilter="collab" />
-        <SudokuBlock player="thamy" data={stats.sudoku.thamy} typeFilter="collab" />
+      <div className="stats-game-block stats-game-block-sudoku">
+        <div className="stats-game-title">🔢 Sudoku</div>
+        <SudokuRankingControls
+          tab={sudokuTab}
+          sortBy={sortBy}
+          onTabChange={setSudokuTab}
+          onSortChange={setSortBy}
+        />
+        <SudokuBlock
+          player="helio"
+          data={stats.sudoku.helio}
+          typeFilter={sudokuTypeFilter}
+          sortBy={sortBy}
+        />
+        <SudokuBlock
+          player="thamy"
+          data={stats.sudoku.thamy}
+          typeFilter={sudokuTypeFilter}
+          sortBy={sortBy}
+        />
       </div>
 
       <div className="stats-game-block">

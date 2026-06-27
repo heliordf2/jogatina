@@ -1,31 +1,28 @@
 import { useState } from 'react';
 import IMGS from '../assets/imgs.js';
-import { PLAYER_COLORS, PLAYER_NAMES } from '../data/constants.js';
-import { aggregateSudokuHistory } from '../utils/sudokuRanking.js';
+import { PLAYER_COLORS } from '../data/constants.js';
+import { aggregateSudokuHistory, sortPlayerRows } from '../utils/sudokuRanking.js';
 import SudokuHistoryList from './SudokuHistoryList.jsx';
+import SudokuRankingControls from './SudokuRankingControls.jsx';
 
-const TABS = [
-  { id: 'all', label: '📊 Geral' },
-  { id: 'collab', label: '⚔️ Duelo colaborativo' },
-];
-
-function buildPlayerRows(scores, tab) {
+function buildPlayerRows(scores, tab, sortBy) {
   const typeFilter = tab === 'collab' ? 'collab' : null;
 
-  return [
+  const rows = [
     { name: 'Helio', player: 'helio', color: PLAYER_COLORS.helio, data: scores.helio },
     { name: 'Thamy', player: 'thamy', color: PLAYER_COLORS.thamy, data: scores.thamy },
-  ]
-    .map((p) => ({
-      ...p,
-      stats: aggregateSudokuHistory(p.data.history, { type: typeFilter }),
-    }))
-    .sort((a, b) => b.stats.total - a.stats.total);
+  ].map((p) => ({
+    ...p,
+    stats: aggregateSudokuHistory(p.data.history, { type: typeFilter, sortBy }),
+  }));
+
+  return sortPlayerRows(rows, sortBy);
 }
 
 export default function RankingScreen({ scores, onGoHome }) {
   const [tab, setTab] = useState('all');
-  const players = buildPlayerRows(scores, tab);
+  const [sortBy, setSortBy] = useState('pts');
+  const players = buildPlayerRows(scores, tab, sortBy);
   const medals = ['🥇', '🥈'];
   const isCollab = tab === 'collab';
 
@@ -39,23 +36,20 @@ export default function RankingScreen({ scores, onGoHome }) {
         <div />
       </div>
 
-      <div className="tabs ranking-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`tab${tab === t.id ? ' active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <SudokuRankingControls
+        tab={tab}
+        sortBy={sortBy}
+        onTabChange={setTab}
+        onSortChange={setSortBy}
+      />
 
       <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: '1rem' }}>
         {isCollab
           ? 'Pontos e erros apenas dos duelos colaborativos online.'
           : 'Pontos acumulados de todas as partidas (solo + duelo).'}
+        {sortBy === 'date'
+          ? ' Ordenação pela partida mais recente.'
+          : ' Ordenação pelo total de pontos.'}
       </p>
 
       {players.map((p, i) => {
@@ -65,7 +59,7 @@ export default function RankingScreen({ scores, onGoHome }) {
         return (
           <div key={p.player} className="rank-card">
             <div className="rank-row">
-              <div className="rank-num">{medals[i]}</div>
+              <div className="rank-num">{stats.games > 0 ? medals[i] : '—'}</div>
               <div className="rank-av">
                 <img src={IMGS[p.player]} alt={p.name} />
               </div>
@@ -92,6 +86,7 @@ export default function RankingScreen({ scores, onGoHome }) {
               <SudokuHistoryList
                 history={stats.history}
                 color={p.color}
+                sortBy={sortBy}
                 emptyLabel={
                   isCollab ? 'Nenhum duelo colaborativo registrado' : 'Nenhuma partida registrada'
                 }
