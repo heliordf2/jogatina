@@ -10,7 +10,7 @@
   --cell-highlight:#b8e6d0;
   --cell-selected:#8fd4b5;
   --cell-num-match:#fb89f9;
-  --cell-num-match-h:#d6e8ff;
+  --cell-num-match-h:#fb89f9;
   --cell-num-match-t:#fde0ef;
 }
 [data-theme="dark"]{
