@@ -15,10 +15,11 @@ export default function HomeScreen({
   onShowRanking,
   onBack,
   joiningCollab = false,
+  scoresReady = true,
 }) {
   const playerDetail =
-    mode === 'solo'
-      ? `${scores[onlinePlayer].total} pts total`
+    mode === 'solo' && onlinePlayer
+      ? `${scores[onlinePlayer]?.total ?? 0} pts total`
       : 'duelo online';
 
   return (
@@ -57,8 +58,13 @@ export default function HomeScreen({
       {mode === 'solo' ? (
         <div>
           <DifficultyPicker diff={diff} onSetDiff={onSetDiff} />
-          <button type="button" className="btn btn-primary" onClick={onStartSolo}>
-            ▶ Iniciar Jogo Solo
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onStartSolo}
+            disabled={!scoresReady}
+          >
+            {scoresReady ? '▶ Iniciar Jogo Solo' : 'Carregando pontuação...'}
           </button>
         </div>
       ) : (
@@ -78,9 +84,13 @@ export default function HomeScreen({
             type="button"
             className="btn btn-primary"
             onClick={onStartCollab}
-            disabled={joiningCollab}
+            disabled={joiningCollab || !scoresReady}
           >
-            {joiningCollab ? 'Conectando...' : '⚔️ Iniciar / Entrar no Duelo'}
+            {joiningCollab
+              ? 'Conectando...'
+              : scoresReady
+                ? '⚔️ Iniciar / Entrar no Duelo'
+                : 'Carregando pontuação...'}
           </button>
         </div>
       )}

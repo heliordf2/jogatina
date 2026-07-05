@@ -1,4 +1,5 @@
 import { INITIAL_SCORES } from '../data/constants.js';
+import { mergeSudokuPlayer } from '../../shared/sudokuScoring.js';
 import { fetchSudokuScores, saveSudokuScoresApi } from './api.js';
 
 const STORAGE_KEY = 'sudoku_ht_v2';
@@ -36,6 +37,26 @@ function clearScoresLocalStorage() {
   }
 }
 
+let scoresLoadPromise = null;
+let cachedScores = null;
+
+function rememberScores(scores) {
+  cachedScores = mergeScores(scores);
+  return cachedScores;
+}
+
+/** Garante que a pontuação foi carregada do servidor antes de gravar uma partida. */
+export async function ensureScoresLoaded() {
+  if (cachedScores) return cachedScores;
+  if (!scoresLoadPromise) {
+    scoresLoadPromise = loadScores().then((scores) => {
+      rememberScores(scores);
+      return scores;
+    });
+  }
+  return scoresLoadPromise;
+}
+
 export async function loadScores() {
   try {
     const remote = mergeScores(await fetchSudokuScores());
@@ -45,24 +66,38 @@ export async function loadScores() {
       if (local && !isScoresEmpty(local)) {
         await saveSudokuScoresApi(local);
         clearScoresLocalStorage();
-        return local;
+        return rememberScores(local);
       }
     }
 
-    return remote;
+    return rememberScores(remote);
   } catch {
     const local = loadScoresFromLocalStorage();
-    return local ?? cloneDefault();
+    const scores = local ?? cloneDefault();
+    return rememberScores(scores);
   }
 }
 
+function mergeAllScores(remote, incoming) {
+  return {
+    helio: mergeSudokuPlayer(remote.helio, incoming.helio),
+    thamy: mergeSudokuPlayer(remote.thamy, incoming.thamy),
+  };
+}
+
 export async function saveScores(scores) {
+  let payload = mergeScores(scores);
+
   try {
-    await saveSudokuScoresApi(scores);
+    const remote = mergeScores(await fetchSudokuScores());
+    payload = mergeAllScores(remote, payload);
+    await saveSudokuScoresApi(payload);
     clearScoresLocalStorage();
+    rememberScores(payload);
   } catch {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      rememberScores(payload);
     } catch {
       // ignore storage errors
     }

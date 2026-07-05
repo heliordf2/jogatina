@@ -10,12 +10,12 @@ import {
   createEmptyDrafts,
   createEmptyCollabDrafts,
   createInitialGameState,
-  DIFF_MULT,
   DIFF_NAMES,
   formatDiffStats,
   INITIAL_SCORES,
   PLAYER_NAMES,
 } from './data/constants.js';
+import { calcSoloScore } from '../shared/sudokuScoring.js';
 import {
   createOrJoinSudokuCollabGame,
   fetchActiveSudokuCollabGame,
@@ -29,7 +29,7 @@ import {
 } from './utils/api.js';
 import { syncSudokuStats } from './utils/gameStats.js';
 import { recordGameStart } from './utils/gameSessions.js';
-import { loadScores, saveScores } from './utils/scores.js';
+import { ensureScoresLoaded, loadScores, saveScores } from './utils/scores.js';
 import {
   generateSudoku,
   hasCollabDraftAt,
@@ -130,6 +130,7 @@ export default function SudokuApp({
   const [mode, setMode] = useState('solo');
   const [diff, setDiff] = useState('easy');
   const [scores, setScores] = useState(() => structuredClone(INITIAL_SCORES));
+  const [scoresReady, setScoresReady] = useState(false);
   const [game, setGame] = useState(createInitialGameState);
   const [winResult, setWinResult] = useState(null);
   const [joiningCollab, setJoiningCollab] = useState(false);
@@ -146,7 +147,9 @@ export default function SudokuApp({
   }, [game]);
 
   useEffect(() => {
-    loadScores().then(setScores);
+    ensureScoresLoaded()
+      .then(setScores)
+      .finally(() => setScoresReady(true));
   }, []);
 
   const stopTimer = useCallback(() => {
@@ -179,7 +182,7 @@ export default function SudokuApp({
       const gameDiff = serverGame.difficulty || diff;
       const diffLabel = DIFF_NAMES[gameDiff].replace('💀 ', '');
 
-      loadScores().then(setScores);
+      ensureScoresLoaded().then(setScores);
 
       setWinResult({
         emoji: winner ? '🏆' : '🤝',
@@ -325,41 +328,40 @@ export default function SudokuApp({
   }, [stopTimer]);
 
   const checkWin = useCallback(
-    (currentGame) => {
+    async (currentGame) => {
       for (let r = 0; r < 9; r++) {
         for (let c = 0; c < 9; c++) {
           if (currentGame.board[r][c] !== currentGame.solution[r][c]) return false;
         }
       }
 
+      if (!onlinePlayer) return true;
+
       stopTimer();
+      const gameDiff = currentGame.difficulty || diff;
       const timeStr = formatTime(currentGame.timer);
-      const diffLabel = DIFF_NAMES[diff].replace('💀 ', '');
+      const diffLabel = DIFF_NAMES[gameDiff].replace('💀 ', '');
+      const pts = calcSoloScore(currentGame.errors, gameDiff);
 
-      const pts = Math.max(
-        0,
-        Math.round((1000 - currentGame.errors * 80) * DIFF_MULT[diff]),
-      );
-
-      setScores((prev) => {
-        const next = structuredClone(prev);
-        const p = next[onlinePlayer];
-        p.total += pts;
-        p.games++;
-        if (!p.best || pts > p.best) p.best = pts;
-        p.history.unshift({
-          pts,
-          diff,
-          time: timeStr,
-          type: 'solo',
-          date: new Date().toLocaleDateString('pt-BR'),
-          errors: currentGame.errors,
-        });
-        if (p.history.length > 20) p.history.pop();
-        saveScores(next).catch(() => {});
-        syncSudokuStats(next).catch(() => {});
-        return next;
+      const base = await ensureScoresLoaded();
+      const next = structuredClone(base);
+      const p = next[onlinePlayer];
+      p.total += pts;
+      p.games++;
+      if (!p.best || pts > p.best) p.best = pts;
+      p.history.unshift({
+        pts,
+        diff: gameDiff,
+        time: timeStr,
+        type: 'solo',
+        date: new Date().toLocaleDateString('pt-BR'),
+        errors: currentGame.errors,
       });
+      if (p.history.length > 20) p.history.pop();
+
+      setScores(next);
+      saveScores(next).catch(() => {});
+      syncSudokuStats(next).catch(() => {});
 
       setWinResult({
         emoji: currentGame.errors === 0 ? '🎯' : '🎉',
@@ -501,7 +503,6 @@ export default function SudokuApp({
               drafts,
             };
             next.board[r][c] = 0;
-            next.drafts[r][c].clear();
             return next;
           }
 
@@ -857,6 +858,7 @@ export default function SudokuApp({
           onlinePlayer={onlinePlayer}
           remotePresence={remotePresence}
           joiningCollab={joiningCollab}
+          scoresReady={scoresReady}
         />
       )}
 

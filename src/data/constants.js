@@ -6,6 +6,7 @@ import {
   getDiffEmptyCount,
   getDiffStats,
 } from '../../shared/sudokuDifficulty.js';
+import { SOLO_DIFF_MULT } from '../../shared/sudokuScoring.js';
 
 export const DIFF_NAMES = {
   easy: 'Fácil',
@@ -14,12 +15,7 @@ export const DIFF_NAMES = {
   extreme: '💀 Extremo',
 };
 
-export const DIFF_MULT = {
-  easy: 1,
-  medium: 1.5,
-  hard: 2,
-  extreme: 3,
-};
+export const DIFF_MULT = SOLO_DIFF_MULT;
 
 export {
   DIFF_REMOVES,

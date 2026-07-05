@@ -9,7 +9,8 @@
     "server": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node scripts/start.mjs"
+    "start": "node scripts/start.mjs",
+    "test:scoring": "node --test scripts/test-sudoku-scoring.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

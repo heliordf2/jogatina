@@ -407,8 +407,9 @@ export async function applySudokuCollabCell({ player, row: rowIndex, col, value 
         next.board[r][c] = 0;
         next.collabCells.helio = next.collabCells.helio.filter(([cr, cc]) => !(cr === r && cc === c));
         next.collabCells.thamy = next.collabCells.thamy.filter(([cr, cc]) => !(cr === r && cc === c));
+      } else {
+        clearCollabDraftAt(next.collabDrafts, r, c);
       }
-      clearCollabDraftAt(next.collabDrafts, r, c);
     } else {
       const correct = n === next.solution[r][c];
       const actor = strictTurn ? next.collabTurn : player;
