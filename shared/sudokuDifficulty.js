@@ -2,8 +2,8 @@
 export const DIFF_REMOVES = {
   easy: 32,
   medium: 40,
-  hard: 50,
-  extreme: 58,
+  hard: 48,
+  extreme: 53,
 };
 
 export const SUDOKU_DIFFICULTY_IDS = ['easy', 'medium', 'hard', 'extreme'];

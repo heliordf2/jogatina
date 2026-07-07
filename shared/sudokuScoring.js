@@ -7,7 +7,7 @@ export const SOLO_DIFF_MULT = {
 };
 
 export const SOLO_BASE_PTS = 1000;
-export const SOLO_ERROR_PENALTY = 80;
+export const SOLO_ERROR_PENALTY = 50;
 
 export const COLLAB_CORRECT_PTS = 10;
 export const COLLAB_WRONG_PENALTY = 5;
