@@ -213,7 +213,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .cell-draft span.on.draft-h.draft-t{color:#E91E8C;text-shadow:-0.5px 0 #1a1a18,.5px 0 #1a1a18}
 [data-theme="dark"] .cell-draft span.on.draft-h{color:#f0efe8}
 [data-theme="dark"] .cell-draft span.on.draft-h.draft-t{text-shadow:-0.5px 0 #f0efe8,.5px 0 #f0efe8}
-@media(max-width:520px){:root{--cell:38px}body{padding:.75rem .5rem}.cell{font-size:15px}.cell-draft span{font-size:7px}}
+@media(max-width:520px){:root{--cell:44px}body{padding:.75rem .5rem}.cell{font-size:20px}.cell-draft span{font-size:9px}}
 
 .progress-bar{height:6px;background:var(--surface1);border-radius:4px;margin-bottom:.4rem;overflow:hidden;border:1px solid var(--border)}
 .progress-fill{height:100%;border-radius:4px;transition:width .4s;background:linear-gradient(90deg,var(--c1),var(--c2))}
