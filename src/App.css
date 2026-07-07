@@ -181,9 +181,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .turn-lock-btn.locked:hover{background:#c93a39}
 
 /* Board */
-.sudoku-grid{display:grid;grid-template-columns:repeat(9,var(--cell));border:2.5px solid var(--text);border-radius:4px;overflow:hidden;flex-shrink:0}
-.cell{width:var(--cell);height:var(--cell);border:.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:400;cursor:pointer;transition:background .08s;background:var(--surface);position:relative;user-select:none}
-.cell.given{font-weight:700;background:var(--surface1);cursor:default}
+.sudoku-grid{display:grid;grid-template-columns:repeat(9,var(--cell));border:2px solid var(--text);border-radius:4px;overflow:hidden;flex-shrink:0}
+.cell{width:var(--cell);height:var(--cell);border:.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:400;cursor:pointer;transition:background .08s;background:var(--surface);position:relative;user-select:none}
+.cell.given{font-weight:600;background:var(--surface1);cursor:default}
 .cell.selected{background:var(--cell-selected)!important}
 .cell.highlight{background:var(--cell-highlight)}
 .cell.error{color:#E02424;font-weight:700}
