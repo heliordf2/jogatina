@@ -68,14 +68,21 @@ export default function GameScreen({
       <CurrentPlayerBar player={onlinePlayer} remotePresence={remotePresence} />
 
       <div className="game-header">
-        <button type="button" className="btn" style={{ padding: '6px 12px', fontSize: 13 }} onClick={onGoHome}>
-          ← Sair
-        </button>
         <div className="game-title">{gameTitle}</div>
         <div className="stats-row">
-          <div className="stat-box">
-            <div className="stat-lbl">⏱</div>
-            <div className="stat-val">{game.paused ? '⏸' : formatTime(game.timer)}</div>
+          <div className="stat-row-group">
+            <div className="stat-box">
+              <div className="stat-lbl">⏱</div>
+              <div className="stat-val">{game.paused ? '⏸' : formatTime(game.timer)}</div>
+            </div>
+            <button
+              type="button"
+              className={`stat-action-btn${game.paused ? ' paused' : ''}`}
+              onClick={onTogglePause}
+              title={game.paused ? 'Continuar' : 'Pausar'}
+            >
+              {game.paused ? '▶' : '⏸'}
+            </button>
           </div>
           <div className="stat-box">
             <div className="stat-lbl">✅</div>
@@ -190,33 +197,40 @@ export default function GameScreen({
       />
 
       <div className="actions">
-        <button
-          type="button"
-          className={`btn${game.paused ? ' btn-primary' : ''}`}
-          onClick={onTogglePause}
-        >
-          {game.paused ? '▶ Continuar' : '⏸ Pausar'}
-        </button>
-        <button
-          type="button"
-          className={`btn btn-draft${game.draftMode ? ' on' : ''}`}
-          onClick={onToggleDraft}
-          disabled={game.paused}
-        >
-          {game.draftMode ? '✏️ Rascunho ON' : '✏️ Rascunho'}
-        </button>
-        <button type="button" className="btn" onClick={onUseHint} disabled={game.paused}>
-          💡 Dica ({game.hints})
-        </button>
-        {game.isCollab ? (
-          <button type="button" className="btn btn-danger" onClick={onNewGame} disabled={rematchDisabled}>
+        <div className="action-group">
+          <button
+            type="button"
+            className={`btn btn-draft${game.draftMode ? ' on' : ''}`}
+            onClick={onToggleDraft}
+            disabled={game.paused}
+          >
+            {game.draftMode ? '✏️ Rascunho ON' : '✏️ Rascunho'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-erase"
+            onClick={() => onEnterNum(0)}
+            disabled={game.paused}
+          >
+            ⌫ Apagar
+          </button>
+          <button type="button" className="btn" onClick={onUseHint} disabled={game.paused}>
+            💡 Dica ({game.hints})
+          </button>
+        </div>
+        <div className="action-group">
+          <button type="button" className="btn" onClick={onGoHome}>
+            ← Sair
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={onNewGame}
+            disabled={game.isCollab ? rematchDisabled : false}
+          >
             {newGameLabel}
           </button>
-        ) : (
-          <button type="button" className="btn btn-danger" onClick={onNewGame}>
-            🔄 Novo
-          </button>
-        )}
+        </div>
       </div>
 
       <OtherPlayerBar onlinePlayer={onlinePlayer} remotePresence={remotePresence} />

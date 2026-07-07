@@ -12,14 +12,6 @@ export default function Numpad({ disabledNums, activeNum, onEnterNum, disabled =
           {n}
         </button>
       ))}
-      <button
-        type="button"
-        className="num-btn erase"
-        disabled={disabled}
-        onClick={() => onEnterNum(0)}
-      >
-        ⌫ Apagar
-      </button>
     </div>
   );
 }
