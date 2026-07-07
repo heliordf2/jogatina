@@ -96,9 +96,6 @@ export default function GameScreen({
             <div className="stat-lbl">❌</div>
             <div className="stat-val ev">{game.errors}</div>
           </div>
-          <button type="button" className="btn btn-exit stat-exit-btn" onClick={onGoHome}>
-            ← Sair
-          </button>
           {game.isCollab && isMyTurn && (
             <button
               type="button"

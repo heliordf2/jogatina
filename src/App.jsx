@@ -216,7 +216,20 @@ export default function App() {
 
   return (
     <>
-      <ThemeToggle theme={theme} onToggle={handleToggleTheme} />
+      <div className="top-controls">
+        <ThemeToggle theme={theme} onToggle={handleToggleTheme} />
+        {game && (
+          <button
+            type="button"
+            className="theme-toggle exit-toggle"
+            onClick={leaveGame}
+            aria-label="Sair"
+            title="Sair"
+          >
+            ↩️
+          </button>
+        )}
+      </div>
       <Toast message={toast.message} visible={toast.visible} />
 
       {!game ? (
