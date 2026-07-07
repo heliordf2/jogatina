@@ -60,15 +60,19 @@ export default function GameScreen({
   const scoreToShow = game.isCollab ? (game.collabScores?.[player] ?? 0) : (scores?.[player]?.total ?? 0);
 
   const gameTitle = game.isCollab
-    ? `⚔️ Duelo — ${formatDiffLabel(diff)} · ${scoreToShow} pts`
-    : `${PLAYER_NAMES[player]} — ${formatDiffLabel(diff)} · ${scoreToShow} pts`;
+    ? '⚔️ Duelo'
+    : formatDiffLabel(diff);
 
   return (
     <div className="screen active">
-      <CurrentPlayerBar player={onlinePlayer} remotePresence={remotePresence} />
+      <CurrentPlayerBar
+        player={onlinePlayer}
+        remotePresence={remotePresence}
+        inlineMeta={`${formatDiffLabel(diff)} · ${scoreToShow} pts`}
+        showStatus={false}
+      />
 
       <div className="game-header">
-        <div className="game-title">{gameTitle}</div>
         <div className="stats-row">
           <div className="stat-row-group">
             <div className="stat-box">
@@ -92,6 +96,9 @@ export default function GameScreen({
             <div className="stat-lbl">❌</div>
             <div className="stat-val ev">{game.errors}</div>
           </div>
+          <button type="button" className="btn btn-exit stat-exit-btn" onClick={onGoHome}>
+            ← Sair
+          </button>
           {game.isCollab && isMyTurn && (
             <button
               type="button"
@@ -216,11 +223,6 @@ export default function GameScreen({
           </button>
           <button type="button" className="btn" onClick={onUseHint} disabled={game.paused}>
             💡 Dica ({game.hints})
-          </button>
-        </div>
-        <div className="action-group">
-          <button type="button" className="btn" onClick={onGoHome}>
-            ← Sair
           </button>
           <button
             type="button"

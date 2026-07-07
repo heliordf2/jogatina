@@ -125,9 +125,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .whoami-name{font-size:15px;font-weight:700}
 
 /* Game header */
-.game-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:6px}
-.game-title{font-size:13px;font-weight:600;flex:1;text-align:center}
-.stats-row{display:flex;gap:5px}
+.game-header{display:flex;align-items:center;justify-content:center;margin-bottom:.75rem;gap:10px;flex-wrap:wrap}
+.game-title{font-size:13px;font-weight:600;flex:1;text-align:center;min-width:0}
+.stats-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+.stat-row-group{display:flex;align-items:center;gap:4px}
 .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 8px;text-align:center;min-width:48px}
 .stat-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
 .stat-val{font-size:16px;font-weight:700}
@@ -228,8 +229,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .num-btn.active-num{background:var(--c1);color:#fff;border-color:var(--c1);box-shadow:0 0 0 2px rgba(127,119,221,.35)}
 .num-btn:disabled{opacity:.25;cursor:default;pointer-events:none}
 
-.actions{display:flex;gap:7px;justify-content:space-between;flex-wrap:wrap;margin-bottom:.75rem;align-items:center}
-.action-group{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:.75rem;align-items:center}
+.action-group{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
 .stat-action-btn{width:38px;height:38px;border-radius:12px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:18px;display:flex;align-items:center;justify-content:center;padding:0;min-width:38px}
 .stat-action-btn:hover{background:var(--surface1)}
 .stat-action-btn.paused{background:var(--c1);color:#fff;border-color:var(--c1)}
@@ -301,7 +302,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .current-player-av{position:relative;width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0}
 .current-player-av img{width:100%;height:100%;object-fit:cover}
 .current-player-info{min-width:0}
-.current-player-name{font-size:15px;font-weight:600}
+.current-player-name{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.current-player-inline-meta{font-size:12px;color:var(--text2);font-weight:500}
 .current-player-meta{font-size:12px;color:var(--text2);margin-top:2px}
 .current-player-meta.online{color:#1D9E75;font-weight:600}
 .other-player-bar{display:flex;align-items:center;gap:10px;padding:.6rem 1rem;background:var(--surface1);border:1px solid var(--border);border-radius:12px;margin-top:.75rem;opacity:.9}
