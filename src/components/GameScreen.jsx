@@ -26,6 +26,7 @@ export default function GameScreen({
   player,
   onlinePlayer,
   remotePresence,
+  scores,
   progress,
   activeNum,
   onGoHome,
@@ -56,9 +57,11 @@ export default function GameScreen({
   const newGameLabel = waitingRematchApproval ? '⏳ Aguardando...' : '🔄 Novo';
   const rematchDisabled = rematchBusy || waitingRematchApproval;
 
+  const scoreToShow = game.isCollab ? (game.collabScores?.[player] ?? 0) : (scores?.[player]?.total ?? 0);
+
   const gameTitle = game.isCollab
-    ? `⚔️ Duelo — ${formatDiffLabel(diff)} · ${formatDiffStats(diff)}`
-    : `${PLAYER_NAMES[player]} — ${formatDiffLabel(diff)} · ${formatDiffStats(diff)}`;
+    ? `⚔️ Duelo — ${formatDiffLabel(diff)} · ${scoreToShow} pts`
+    : `${PLAYER_NAMES[player]} — ${formatDiffLabel(diff)} · ${scoreToShow} pts`;
 
   return (
     <div className="screen active">

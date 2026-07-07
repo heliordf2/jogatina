@@ -872,6 +872,7 @@ export default function SudokuApp({
           }
           player={onlinePlayer}
           onlinePlayer={onlinePlayer}
+          scores={scores}
           remotePresence={remotePresence}
           progress={progress}
           activeNum={activeNum}

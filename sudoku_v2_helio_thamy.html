@@ -11,7 +11,7 @@
   --cell:54px;
   --bg:#f5f5f3;--surface:#fff;--surface1:#f8f8f6;
   --border:#e0dfd8;--border2:#ccc;
-  --text:#1a1a18;--text2:#555;--text3:#888;
+  --text:#153A5B;--text2:#555;--text3:#888;
   --radius:8px;
 }
 @media(prefers-color-scheme:dark){:root{
@@ -121,7 +121,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 /* Board */
 .sudoku-grid{display:grid;grid-template-columns:repeat(9,var(--cell));border:2px solid var(--text);border-radius:4px;overflow:hidden;flex-shrink:0}
-.cell{width:var(--cell);height:var(--cell);border:.4px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:400;cursor:pointer;transition:background .08s;background:var(--surface);position:relative;user-select:none}
+.cell{width:var(--cell);height:var(--cell);border:.4px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:400;cursor:pointer;transition:background .08s;background:var(--surface);position:relative;user-select:none}
 .cell.given{font-weight:600;background:var(--surface1);cursor:default}
 .cell.selected{background:#dde9ff!important}
 .cell.highlight{background:var(--surface1)}
@@ -134,7 +134,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .cell-draft{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;padding:1px}
 .cell-draft span{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:var(--text3);line-height:1}
 .cell-draft span.on{color:#534AB7}
-@media(max-width:530px){:root{--cell:40px}body{padding:.5rem .4rem}.cell{font-size:18px}.cell-draft span{font-size:8px}.board-wrap{padding:0 .5rem}}
+@media(max-width:530px){:root{--cell:40px}body{padding:.5rem .4rem}.cell{font-size:20px}.cell-draft span{font-size:8px}.board-wrap{padding:0 .5rem}}
 
 .progress-bar{height:6px;background:var(--surface1);border-radius:4px;margin-bottom:.4rem;overflow:hidden;border:1px solid var(--border)}
 .progress-fill{height:100%;border-radius:4px;transition:width .4s;background:linear-gradient(90deg,var(--c1),var(--c2))}
