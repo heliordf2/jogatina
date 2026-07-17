@@ -34,7 +34,6 @@ export default function GameScreen({
   onEnterNum,
   onToggleDraft,
   onTogglePause,
-  onUseHint,
   onNewGame,
   onToggleTurnLock,
   onAcceptRematch,
@@ -217,9 +216,6 @@ export default function GameScreen({
             disabled={game.paused}
           >
             ⌫ Apagar
-          </button>
-          <button type="button" className="btn" onClick={onUseHint} disabled={game.paused}>
-            💡 Dica ({game.hints})
           </button>
           <button
             type="button"

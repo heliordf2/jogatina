@@ -21,15 +21,13 @@ import {
   fetchActiveSudokuCollabGame,
   postSudokuCollabCell,
   postSudokuCollabDraft,
-  postSudokuCollabHint,
   postSudokuCollabRematchRequest,
   postSudokuCollabRematchRespond,
   postSudokuCollabPause,
   postSudokuCollabTurnLock,
 } from './utils/api.js';
-import { syncSudokuStats } from './utils/gameStats.js';
 import { recordGameStart } from './utils/gameSessions.js';
-import { ensureScoresLoaded, loadScores, saveScores } from './utils/scores.js';
+import { ensureScoresLoaded, loadScores, recordSoloGame } from './utils/scores.js';
 import {
   generateSudoku,
   hasCollabDraftAt,
@@ -240,6 +238,7 @@ export default function SudokuApp({
       drafts: createEmptyDrafts(),
       turnLocked: false,
       paused: false,
+      resultKey: crypto.randomUUID(),
     });
     setActiveNum(null);
     setScreen('game');
@@ -337,6 +336,10 @@ export default function SudokuApp({
 
       if (!onlinePlayer) return true;
 
+      const resultKey = currentGame.resultKey;
+      if (!resultKey || winHandledRef.current === resultKey) return true;
+      winHandledRef.current = resultKey;
+
       stopTimer();
       const gameDiff = currentGame.difficulty || diff;
       const timeStr = formatTime(currentGame.timer);
@@ -356,12 +359,14 @@ export default function SudokuApp({
         type: 'solo',
         date: new Date().toLocaleDateString('pt-BR'),
         errors: currentGame.errors,
+        resultKey,
       });
       if (p.history.length > 20) p.history.pop();
 
       setScores(next);
-      saveScores(next).catch(() => {});
-      syncSudokuStats(next).catch(() => {});
+      recordSoloGame(onlinePlayer, p.history[0], next)
+        .then(setScores)
+        .catch(() => {});
 
       setWinResult({
         emoji: currentGame.errors === 0 ? '🎯' : '🎉',
@@ -656,64 +661,6 @@ export default function SudokuApp({
     }
   }, [applyServerCollabGame, onlinePlayer, showToast]);
 
-  const useHint = useCallback(async () => {
-    const g = gameRef.current;
-    if (g.paused) return;
-    if (g.hints <= 0) {
-      showToast('Sem dicas restantes!');
-      return;
-    }
-    if (g.isCollab && !canCollabPlay(g, onlinePlayer)) {
-      showToast(`🔒 ${PLAYER_NAMES[g.collabTurn]} travou a vez!`);
-      return;
-    }
-
-    if (g.isCollab) {
-      try {
-        const { game: serverGame, chatMessage } = await postSudokuCollabHint({
-          player: onlinePlayer,
-        });
-        applyServerCollabGame(serverGame, {
-          chatMessage,
-          toastMessage: '💡 Dica usada!',
-        });
-      } catch (error) {
-        showToast(error.message);
-      }
-      return;
-    }
-
-    setGame((current) => {
-      if (current.paused) return current;
-      if (current.hints <= 0) return current;
-
-      const empties = [];
-      for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-          if (!current.given[r][c] && current.board[r][c] !== current.solution[r][c]) {
-            empties.push([r, c]);
-          }
-        }
-      }
-      if (!empties.length) return current;
-
-      const [r, c] = empties[Math.floor(Math.random() * empties.length)];
-      const next = {
-        ...current,
-        board: current.board.map((row) => [...row]),
-        drafts: current.drafts.map((row) => row.map((set) => new Set(set))),
-        hints: current.hints - 1,
-        corrects: current.corrects + 1,
-      };
-      next.board[r][c] = next.solution[r][c];
-      next.drafts[r][c].clear();
-      removeDraftFromRegion(next.drafts, r, c, next.solution[r][c]);
-      showToast('💡 Dica usada!', 1500);
-      setTimeout(() => checkWin(next), 0);
-      return next;
-    });
-  }, [applyServerCollabGame, checkWin, onlinePlayer, showToast]);
-
   const handleRematchResult = useCallback(
     (result) => {
       const { action, game: serverGame } = result;
@@ -881,7 +828,6 @@ export default function SudokuApp({
           onEnterNum={enterNum}
           onToggleDraft={toggleDraft}
           onTogglePause={togglePause}
-          onUseHint={useHint}
           onNewGame={newGame}
           onToggleTurnLock={toggleTurnLock}
           onAcceptRematch={handleAcceptRematch}

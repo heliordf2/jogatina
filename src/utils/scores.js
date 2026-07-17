@@ -1,8 +1,9 @@
 import { INITIAL_SCORES } from '../data/constants.js';
 import { mergeSudokuPlayer } from '../../shared/sudokuScoring.js';
-import { fetchSudokuScores, saveSudokuScoresApi } from './api.js';
+import { fetchSudokuScores, recordSudokuSoloGameApi, saveSudokuScoresApi } from './api.js';
 
 const STORAGE_KEY = 'sudoku_ht_v2';
+const PENDING_GAMES_KEY = 'sudoku_pending_games_v1';
 
 function cloneDefault() {
   return structuredClone(INITIAL_SCORES);
@@ -37,6 +38,42 @@ function clearScoresLocalStorage() {
   }
 }
 
+function loadPendingGames() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_GAMES_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingGames(games) {
+  try {
+    if (games.length) localStorage.setItem(PENDING_GAMES_KEY, JSON.stringify(games));
+    else localStorage.removeItem(PENDING_GAMES_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function enqueuePendingGame(player, game) {
+  const pending = loadPendingGames();
+  if (!pending.some((item) => item.game?.resultKey === game.resultKey)) {
+    pending.push({ player, game });
+    savePendingGames(pending);
+  }
+}
+
+async function flushPendingGames() {
+  const pending = loadPendingGames();
+  let completed = 0;
+  for (const item of pending) {
+    await recordSudokuSoloGameApi(item.player, item.game);
+    completed += 1;
+    savePendingGames(pending.slice(completed));
+  }
+}
+
 let scoresLoadPromise = null;
 let cachedScores = null;
 
@@ -59,6 +96,7 @@ export async function ensureScoresLoaded() {
 
 export async function loadScores() {
   try {
+    await flushPendingGames();
     const remote = mergeScores(await fetchSudokuScores());
 
     if (isScoresEmpty(remote)) {
@@ -101,5 +139,22 @@ export async function saveScores(scores) {
     } catch {
       // ignore storage errors
     }
+  }
+}
+
+export async function recordSoloGame(player, game, fallbackScores) {
+  try {
+    const scores = mergeScores(await recordSudokuSoloGameApi(player, game));
+    clearScoresLocalStorage();
+    return rememberScores(scores);
+  } catch (error) {
+    enqueuePendingGame(player, game);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackScores));
+      rememberScores(fallbackScores);
+    } catch {
+      // ignore storage errors
+    }
+    throw error;
   }
 }

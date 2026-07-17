@@ -26,6 +26,42 @@ CREATE TABLE IF NOT EXISTS sudoku_games (
 CREATE INDEX IF NOT EXISTS idx_sudoku_games_player_created
   ON sudoku_games (player_id, created_at DESC);
 
+ALTER TABLE sudoku_games
+  ADD COLUMN IF NOT EXISTS result_key TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sudoku_games_result_key
+  ON sudoku_games (result_key)
+  WHERE result_key IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION protect_sudoku_games() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'O histórico do ranking Sudoku é imutável';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS protect_sudoku_games_trigger ON sudoku_games;
+CREATE TRIGGER protect_sudoku_games_trigger
+  BEFORE UPDATE OR DELETE ON sudoku_games
+  FOR EACH ROW EXECUTE FUNCTION protect_sudoku_games();
+
+CREATE OR REPLACE FUNCTION protect_sudoku_totals() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Os totais do ranking Sudoku não podem ser removidos';
+  END IF;
+  IF NEW.total < OLD.total OR NEW.games < OLD.games OR
+     (OLD.best IS NOT NULL AND (NEW.best IS NULL OR NEW.best < OLD.best)) THEN
+    RAISE EXCEPTION 'Os totais do ranking Sudoku não podem diminuir';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS protect_sudoku_totals_trigger ON sudoku_player_stats;
+CREATE TRIGGER protect_sudoku_totals_trigger
+  BEFORE UPDATE OR DELETE ON sudoku_player_stats
+  FOR EACH ROW EXECUTE FUNCTION protect_sudoku_totals();
+
 CREATE TABLE IF NOT EXISTS chess_player_stats (
   player_id TEXT PRIMARY KEY REFERENCES players(id),
   wins INTEGER NOT NULL DEFAULT 0,

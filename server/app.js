@@ -14,7 +14,14 @@ import {
 import { addChatMessage, clearChatMessages, listChatMessages } from './chatRepository.js';
 import { getPresence, touchPresence } from './presenceRepository.js';
 import { listGameSessions, recordGameStart } from './sessionsRepository.js';
-import { getGameStats, getSudokuScores, saveGameStats, saveSudokuScores } from './statsRepository.js';
+import {
+  getGameStats,
+  getSudokuScores,
+  recordSudokuSoloGame,
+  saveGameStats,
+  saveSudokuScores,
+} from './statsRepository.js';
+import { VALID_SUDOKU_DIFFICULTIES } from '../shared/sudokuDifficulty.js';
 import {
   applySudokuCollabCell,
   applySudokuCollabDraft,
@@ -109,6 +116,33 @@ function registerApiRoutes(router) {
       }
       await saveSudokuScores(req.body);
       res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: safeApiError(error) });
+    }
+  });
+
+  router.post('/sudoku/games', async (req, res) => {
+    try {
+      const { player, pts, time, diff, date, errors = 0, resultKey } = req.body ?? {};
+      if (
+        !['helio', 'thamy'].includes(player) ||
+        !Number.isInteger(pts) ||
+        pts < 0 ||
+        typeof time !== 'string' ||
+        !VALID_SUDOKU_DIFFICULTIES.has(diff) ||
+        typeof date !== 'string' ||
+        typeof resultKey !== 'string' ||
+        resultKey.length < 8 ||
+        resultKey.length > 100 ||
+        !Number.isInteger(errors) ||
+        errors < 0
+      ) {
+        res.status(400).json({ error: 'Dados da partida inválidos' });
+        return;
+      }
+      res.json(
+        await recordSudokuSoloGame(player, { pts, time, diff, date, errors, resultKey }),
+      );
     } catch (error) {
       res.status(500).json({ error: safeApiError(error) });
     }

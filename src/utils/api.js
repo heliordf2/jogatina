@@ -140,6 +140,13 @@ export function saveSudokuScoresApi(scores) {
   });
 }
 
+export function recordSudokuSoloGameApi(player, game) {
+  return request('/sudoku/games', {
+    method: 'POST',
+    body: JSON.stringify({ player, ...game }),
+  });
+}
+
 export function recordGameStartApi({ player, game, mode = null }) {
   return request('/sessions', {
     method: 'POST',
