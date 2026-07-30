@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   applyCollabScore,
   calcSoloScore,
+  calcTimeFactor,
   mergeSudokuPlayer,
 } from '../shared/sudokuScoring.js';
 
@@ -11,16 +12,39 @@ test('calcSoloScore — partida perfeita fácil', () => {
 });
 
 test('calcSoloScore — penalidade por erro', () => {
-  assert.equal(calcSoloScore(2, 'medium'), Math.round((1000 - 160) * 1.5));
+  assert.equal(calcSoloScore(2, 'medium'), Math.round((1000 - 100) * 1.5));
 });
 
 test('calcSoloScore — zera com muitos erros', () => {
-  assert.equal(calcSoloScore(13, 'easy'), 0);
-  assert.equal(calcSoloScore(5, 'easy'), 600);
+  assert.equal(calcSoloScore(20, 'easy'), 0);
+  assert.equal(calcSoloScore(5, 'easy'), 750);
 });
 
 test('calcSoloScore — extremo amplifica a pontuação', () => {
   assert.equal(calcSoloScore(0, 'extreme'), 3000);
+});
+
+test('calcTimeFactor — sem tempo informado, fator neutro', () => {
+  assert.equal(calcTimeFactor(null, 'easy'), 1);
+  assert.equal(calcTimeFactor(undefined, 'easy'), 1);
+});
+
+test('calcTimeFactor — no tempo de referência, fator é 1 + peso', () => {
+  assert.equal(calcTimeFactor(20 * 60, 'easy'), 1.5);
+  assert.equal(calcTimeFactor(25 * 60, 'medium'), 1.5);
+});
+
+test('calcTimeFactor — mais rápido que o parTime aumenta o fator', () => {
+  assert.equal(calcTimeFactor(10 * 60, 'easy'), 2);
+});
+
+test('calcTimeFactor — mais devagar decai rumo a 1 sem chegar lá', () => {
+  const factor = calcTimeFactor(40 * 60, 'easy');
+  assert.ok(factor > 1 && factor < 1.5);
+});
+
+test('calcSoloScore — bônus de tempo aplicado sobre a pontuação base', () => {
+  assert.equal(calcSoloScore(0, 'easy', 20 * 60), 1500);
 });
 
 test('applyCollabScore — acerto e erro', () => {

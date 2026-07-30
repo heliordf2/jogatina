@@ -344,7 +344,7 @@ export default function SudokuApp({
       const gameDiff = currentGame.difficulty || diff;
       const timeStr = formatTime(currentGame.timer);
       const diffLabel = DIFF_NAMES[gameDiff].replace('💀 ', '');
-      const pts = calcSoloScore(currentGame.errors, gameDiff);
+      const pts = calcSoloScore(currentGame.errors, gameDiff, currentGame.timer);
 
       const base = await ensureScoresLoaded();
       const next = structuredClone(base);
